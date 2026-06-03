@@ -1,0 +1,292 @@
+{
+  "stops": {
+    "S001": {
+      "name": "MG Road",
+      "lat": 12.9755,
+      "lon": 77.6069
+    },
+    "S002": {
+      "name": "Trinity Circle",
+      "lat": 12.9762,
+      "lon": 77.6185
+    },
+    "S003": {
+      "name": "Halasuru",
+      "lat": 12.9812,
+      "lon": 77.6254
+    },
+    "S004": {
+      "name": "Indiranagar",
+      "lat": 12.9784,
+      "lon": 77.6408
+    },
+    "S005": {
+      "name": "Domlur",
+      "lat": 12.9606,
+      "lon": 77.6387
+    },
+    "S006": {
+      "name": "Koramangala",
+      "lat": 12.9339,
+      "lon": 77.6269
+    },
+    "S007": {
+      "name": "BTM Layout",
+      "lat": 12.9166,
+      "lon": 77.6101
+    },
+    "S008": {
+      "name": "Jayanagar",
+      "lat": 12.9252,
+      "lon": 77.5938
+    },
+    "S009": {
+      "name": "Lalbagh",
+      "lat": 12.9496,
+      "lon": 77.5846
+    },
+    "S010": {
+      "name": "Majestic",
+      "lat": 12.9767,
+      "lon": 77.5713
+    },
+    "S011": {
+      "name": "Rajajinagar",
+      "lat": 12.9914,
+      "lon": 77.5551
+    },
+    "S012": {
+      "name": "Yeshwanthpur",
+      "lat": 13.0275,
+      "lon": 77.5481
+    },
+    "S013": {
+      "name": "Hebbal",
+      "lat": 13.0353,
+      "lon": 77.5963
+    },
+    "S014": {
+      "name": "Manyata Tech Park",
+      "lat": 13.0452,
+      "lon": 77.6215
+    },
+    "S015": {
+      "name": "Whitefield",
+      "lat": 12.9698,
+      "lon": 77.7499
+    },
+    "S016": {
+      "name": "Marathahalli",
+      "lat": 12.9591,
+      "lon": 77.7009
+    },
+    "S017": {
+      "name": "HSR Layout",
+      "lat": 12.9121,
+      "lon": 77.6446
+    },
+    "S018": {
+      "name": "Electronic City",
+      "lat": 12.8458,
+      "lon": 77.6661
+    },
+    "S019": {
+      "name": "Bannerghatta Road",
+      "lat": 12.8955,
+      "lon": 77.5968
+    },
+    "S020": {
+      "name": "Silk Board",
+      "lat": 12.917,
+      "lon": 77.6232
+    }
+  },
+  "graph": {
+    "S001": {
+      "S002": {
+        "minutes": 6,
+        "route": "5",
+        "trips": 2
+      },
+      "S020": {
+        "minutes": 13,
+        "route": "33",
+        "trips": 1
+      }
+    },
+    "S002": {
+      "S003": {
+        "minutes": 7,
+        "route": "5",
+        "trips": 1
+      },
+      "S001": {
+        "minutes": 6,
+        "route": "5",
+        "trips": 1
+      },
+      "S016": {
+        "minutes": 7,
+        "route": "27",
+        "trips": 1
+      }
+    },
+    "S003": {
+      "S010": {
+        "minutes": 5,
+        "route": "5",
+        "trips": 1
+      },
+      "S002": {
+        "minutes": 6,
+        "route": "5",
+        "trips": 1
+      }
+    },
+    "S010": {
+      "S011": {
+        "minutes": 8,
+        "route": "5",
+        "trips": 1
+      },
+      "S003": {
+        "minutes": 7,
+        "route": "5",
+        "trips": 1
+      },
+      "S001": {
+        "minutes": 12,
+        "route": "27",
+        "trips": 1
+      },
+      "S009": {
+        "minutes": 8,
+        "route": "41",
+        "trips": 1
+      }
+    },
+    "S011": {
+      "S012": {
+        "minutes": 9,
+        "route": "5",
+        "trips": 1
+      },
+      "S010": {
+        "minutes": 8,
+        "route": "5",
+        "trips": 2
+      }
+    },
+    "S012": {
+      "S011": {
+        "minutes": 9,
+        "route": "5",
+        "trips": 1
+      }
+    },
+    "S004": {
+      "S005": {
+        "minutes": 7,
+        "route": "12",
+        "trips": 1
+      }
+    },
+    "S005": {
+      "S006": {
+        "minutes": 7,
+        "route": "12",
+        "trips": 1
+      },
+      "S004": {
+        "minutes": 7,
+        "route": "12",
+        "trips": 1
+      }
+    },
+    "S006": {
+      "S020": {
+        "minutes": 6,
+        "route": "12",
+        "trips": 1
+      },
+      "S005": {
+        "minutes": 7,
+        "route": "12",
+        "trips": 1
+      }
+    },
+    "S020": {
+      "S007": {
+        "minutes": 7,
+        "route": "12",
+        "trips": 1
+      },
+      "S006": {
+        "minutes": 6,
+        "route": "12",
+        "trips": 1
+      },
+      "S017": {
+        "minutes": 12,
+        "route": "33",
+        "trips": 1
+      }
+    },
+    "S007": {
+      "S020": {
+        "minutes": 7,
+        "route": "12",
+        "trips": 1
+      }
+    },
+    "S016": {
+      "S015": {
+        "minutes": 14,
+        "route": "27",
+        "trips": 1
+      }
+    },
+    "S013": {
+      "S014": {
+        "minutes": 8,
+        "route": "33",
+        "trips": 1
+      }
+    },
+    "S014": {
+      "S001": {
+        "minutes": 12,
+        "route": "33",
+        "trips": 1
+      }
+    },
+    "S017": {
+      "S018": {
+        "minutes": 15,
+        "route": "33",
+        "trips": 1
+      }
+    },
+    "S009": {
+      "S008": {
+        "minutes": 8,
+        "route": "41",
+        "trips": 1
+      }
+    },
+    "S008": {
+      "S019": {
+        "minutes": 9,
+        "route": "41",
+        "trips": 1
+      }
+    },
+    "S019": {
+      "S017": {
+        "minutes": 12,
+        "route": "41",
+        "trips": 1
+      }
+    }
+  }
+}
