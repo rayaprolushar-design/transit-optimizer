@@ -1,2 +1,10 @@
-pandas
-rich
+# Phase 1 dependencies
+pandas>=2.0.0
+rich>=13.0.0
+
+# Phase 2 (add later)
+# fastapi
+# uvicorn
+# scikit-learn
+# numpy
+# requests

@@ -1,70 +1,83 @@
-# Transit Optimizer 🚇
+# Transit Optimizer 🚌
 
-Welcome to the **Transit Optimizer**! This smart-city project is designed to load, analyze, query, and optimize transit networks. 
+A full-stack AI-powered transit route optimizer built as a first-year CS mega project.
 
----
-
-## 📅 Phase 1: Week 1 — GTFS Data Explorer
-
-Week 1 focus is on loading standard General Transit Feed Specification (GTFS) files into memory using `pandas` and displaying a high-level summary of the network using the `rich` library.
-
-### 📁 Project Structure
-
-```
-Transit system/
-├── data/
-│   └── gtfs/             # General Transit Feed Specification sources
-│       ├── routes.txt    # Transit routes (Purple Metro, Green Metro, etc.)
-│       ├── stops.txt     # Latitudes, longitudes, and names of transit stops
-│       ├── stop_times.txt# Trip sequence arrival and departure events
-│       └── trips.txt     # List of trips linked to routes
-├── scripts/
-│   └── week1_explore.py  # Python script to load and visualize GTFS network
-├── tests/                # Automated unit and integration tests
-├── logs/                 # Operational log records
-├── requirements.txt      # Python dependencies (pandas, rich)
-├── README.md             # Project documentation (this file)
-└── .gitignore            # Git exclusions
-```
+Finds the fastest route between any two bus stops using graph algorithms (Dijkstra + A*),
+predicts delays with machine learning, and displays everything on a live dashboard.
 
 ---
 
-## 🚀 Quick Start
+## Project Phases
 
-### 1. Pre-requisites
-Ensure you have Python 3.8+ installed on your machine.
+| Phase | What gets built | Status |
+|-------|----------------|--------|
+| 1 | Data layer + routing algorithms (CLI) | 🔨 In progress |
+| 2 | ML delay prediction model + REST API | 📅 Planned |
+| 3 | Real-time web dashboard | 📅 Planned |
+| 4 | Docker, CI/CD, tests, pitch docs | 📅 Planned |
 
-### 2. Set Up Virtual Environment (Optional but Recommended)
+---
+
+## Phase 1 — Week 1: GTFS Explorer
+
+### What it does
+- Loads GTFS transit data (stops, routes, trips, timetables)
+- Shows network stats: total stops, routes, trips
+- Displays stop sequences per route
+- Computes network insights (busiest stop, avg stops/trip)
+
+### How to run
+
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate  # On macOS/Linux
-```
+# 1. Clone the repo
+git clone https://github.com/YOUR_USERNAME/transit-optimizer.git
+cd transit-optimizer
 
-### 3. Install Dependencies
-Install pandas and rich using pip:
-```bash
-pip install -r requirements.txt
-```
+# 2. Install dependencies
+pip install pandas rich
 
-### 4. Run the Explorer
-Execute the Python exploration script to view the transit statistics and network insights:
-```bash
+# 3. Run the explorer
 python scripts/week1_explore.py
 ```
 
----
+### Data source
+Uses GTFS (General Transit Feed Specification) — the open standard used by
+Google Maps, Citymapper, and every major transit app worldwide.
 
-## 📊 Network Insights Generated
-
-The Week 1 explore script computes and presents the following:
-* **Network Summary**: Counts of total stops, routes, trips, and stop events.
-* **Stop Samples**: Details of locations and coordinate pairs.
-* **Routes Listing**: Details and transportation modes (Metro, Bus, etc.).
-* **Route Drill-down**: Complete sequence of stops, arrival, and departure times for a sample route.
-* **Fun Facts**: Most visited stops, average stops per trip, and the busiest route.
+Free Indian GTFS feeds:
+- https://otd.in (BMTC Bengaluru, DIMTS Delhi)
+- https://gtfs.org/resources/gtfs_data/
 
 ---
 
-## 🔮 Next Steps
-* **Week 2**: Load GTFS datasets into SQLite databases and construct expressive SQL queries to explore the network.
-* **Week 3**: Formulate transit network topology as a Directed Graph (DiGraph) for routing engines.
+## Project structure
+
+```
+transit-optimizer/
+├── data/
+│   └── gtfs/              # GTFS feed files
+│       ├── stops.txt
+│       ├── routes.txt
+│       ├── trips.txt
+│       └── stop_times.txt
+├── scripts/
+│   └── week1_explore.py   # Week 1: data exploration
+├── tests/                 # pytest tests (added Week 11)
+├── logs/                  # query logs (added Week 9)
+└── README.md
+```
+
+---
+
+## Topics covered (Year 1 CS)
+
+- **DSA** — graphs, Dijkstra, A*, priority queues, adjacency lists
+- **DBMS** — SQLite schema design, SQL queries, indexing
+- **OS** — multithreading, file I/O, process profiling
+- **Computer Networks** — REST APIs, WebSockets, HTTP
+- **Mathematics** — Haversine formula, ML model evaluation
+
+---
+
+## Built with
+Python · pandas · SQLite · rich · FastAPI · React · Docker

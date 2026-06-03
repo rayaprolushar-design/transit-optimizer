@@ -1,9 +1,21 @@
 stop_id,stop_name,stop_lat,stop_lon
-S001,Kempegowda Station Majestic,12.9756,77.5728
-S002,MG Road,12.9754,77.6068
-S003,Indiranagar,12.9783,77.6387
-S004,Baiyappanahalli,12.9907,77.6524
-S005,Trinity,12.9732,77.6169
-S006,Cubbon Park,12.9812,77.5975
-S007,KSR Railway Station,12.9782,77.5684
-S008,Challaghatta,12.9038,77.4646
+S001,MG Road,12.9755,77.6069
+S002,Trinity Circle,12.9762,77.6185
+S003,Halasuru,12.9812,77.6254
+S004,Indiranagar,12.9784,77.6408
+S005,Domlur,12.9606,77.6387
+S006,Koramangala,12.9339,77.6269
+S007,BTM Layout,12.9166,77.6101
+S008,Jayanagar,12.9252,77.5938
+S009,Lalbagh,12.9496,77.5846
+S010,Majestic,12.9767,77.5713
+S011,Rajajinagar,12.9914,77.5551
+S012,Yeshwanthpur,13.0275,77.5481
+S013,Hebbal,13.0353,77.5963
+S014,Manyata Tech Park,13.0452,77.6215
+S015,Whitefield,12.9698,77.7499
+S016,Marathahalli,12.9591,77.7009
+S017,HSR Layout,12.9121,77.6446
+S018,Electronic City,12.8458,77.6661
+S019,Bannerghatta Road,12.8955,77.5968
+S020,Silk Board,12.9170,77.6232

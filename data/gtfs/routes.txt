@@ -1,4 +1,6 @@
 route_id,route_short_name,route_long_name,route_type
-R001,Purple,Purple Line (Challaghatta - Whitefield),1
-R002,Green,Green Line (Silk Institute - Nagasandra),1
-R003,500-D,Hebbal to Silk Board Outer Ring Road,3
+R001,5,MG Road to Yeshwanthpur,3
+R002,12,Indiranagar to BTM Layout,3
+R003,27,Majestic to Whitefield,3
+R004,33,Hebbal to Electronic City,3
+R005,41,Rajajinagar to HSR Layout,3
