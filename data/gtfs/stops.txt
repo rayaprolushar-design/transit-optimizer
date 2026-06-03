@@ -1,0 +1,9 @@
+stop_id,stop_name,stop_lat,stop_lon
+S001,Kempegowda Station Majestic,12.9756,77.5728
+S002,MG Road,12.9754,77.6068
+S003,Indiranagar,12.9783,77.6387
+S004,Baiyappanahalli,12.9907,77.6524
+S005,Trinity,12.9732,77.6169
+S006,Cubbon Park,12.9812,77.5975
+S007,KSR Railway Station,12.9782,77.5684
+S008,Challaghatta,12.9038,77.4646

@@ -1,0 +1,4 @@
+route_id,route_short_name,route_long_name,route_type
+R001,Purple,Purple Line (Challaghatta - Whitefield),1
+R002,Green,Green Line (Silk Institute - Nagasandra),1
+R003,500-D,Hebbal to Silk Board Outer Ring Road,3
