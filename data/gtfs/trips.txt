@@ -1,8 +1,9 @@
-route_id,trip_id
-R001,T001
-R001,T002
-R002,T003
-R002,T004
-R003,T005
-R004,T007
-R005,T008
+trip_id,route_id,service_id,trip_headsign
+T001,R001,WD,Yeshwanthpur
+T002,R001,WD,MG Road
+T003,R002,WD,BTM Layout
+T004,R002,WD,Indiranagar
+T005,R003,WD,Whitefield
+T006,R003,WD,Majestic
+T007,R004,WD,Electronic City
+T008,R005,WD,HSR Layout
