@@ -4,3 +4,4 @@ R002,12,Indiranagar to BTM Layout,3
 R003,27,Majestic to Whitefield,3
 R004,33,Hebbal to Electronic City,3
 R005,41,Rajajinagar to HSR Layout,3
+R006,M1,MG Road Metro to Indiranagar Metro,1

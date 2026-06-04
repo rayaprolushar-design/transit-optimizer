@@ -19,3 +19,6 @@ S017,HSR Layout,12.9121,77.6446
 S018,Electronic City,12.8458,77.6661
 S019,Bannerghatta Road,12.8955,77.5968
 S020,Silk Board,12.9170,77.6232
+S021,MG Road Metro,12.9753,77.6066
+S022,Trinity Metro,12.976,77.6183
+S023,Indiranagar Metro,12.9781,77.6405

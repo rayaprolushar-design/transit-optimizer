@@ -127,6 +127,13 @@
         "minutes": 13,
         "route": "33",
         "trips": 1
+      },
+      "S021": {
+        "minutes": 3.5,
+        "route": "WALK",
+        "trips": 1,
+        "type": "walk",
+        "dist_km": 0.039
       }
     },
     "S002": {
@@ -144,6 +151,13 @@
         "minutes": 7,
         "route": "27",
         "trips": 1
+      },
+      "S022": {
+        "minutes": 3.4,
+        "route": "WALK",
+        "trips": 1,
+        "type": "walk",
+        "dist_km": 0.031
       }
     },
     "S003": {
@@ -156,6 +170,13 @@
         "minutes": 6,
         "route": "5",
         "trips": 1
+      },
+      "S022": {
+        "minutes": 15.0,
+        "route": "WALK",
+        "trips": 1,
+        "type": "walk",
+        "dist_km": 0.962
       }
     },
     "S010": {
@@ -204,6 +225,13 @@
         "minutes": 7,
         "route": "12",
         "trips": 1
+      },
+      "S023": {
+        "minutes": 3.6,
+        "route": "WALK",
+        "trips": 1,
+        "type": "walk",
+        "dist_km": 0.047
       }
     },
     "S005": {
@@ -308,6 +336,13 @@
         "minutes": 5,
         "route": "M1",
         "trips": 1
+      },
+      "S001": {
+        "minutes": 3.5,
+        "route": "WALK",
+        "trips": 1,
+        "type": "walk",
+        "dist_km": 0.039
       }
     },
     "S022": {
@@ -315,6 +350,29 @@
         "minutes": 8,
         "route": "M1",
         "trips": 1
+      },
+      "S002": {
+        "minutes": 3.4,
+        "route": "WALK",
+        "trips": 1,
+        "type": "walk",
+        "dist_km": 0.031
+      },
+      "S003": {
+        "minutes": 15.0,
+        "route": "WALK",
+        "trips": 1,
+        "type": "walk",
+        "dist_km": 0.962
+      }
+    },
+    "S023": {
+      "S004": {
+        "minutes": 3.6,
+        "route": "WALK",
+        "trips": 1,
+        "type": "walk",
+        "dist_km": 0.047
       }
     }
   }
