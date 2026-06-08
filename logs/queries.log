@@ -1,0 +1,23 @@
+2026-06-04 11:58:34 | from='MG Road'            to='HSR Layout'         algo=astar result=25min speed=0.014ms
+2026-06-04 11:58:34 | from='Majestic'           to='Silk Board'         algo=dijkstra result=25min speed=0.010ms
+2026-06-04 12:02:43 | from='MG Road'            to='HSR Layout'         algo=astar result=25min speed=0.011ms
+2026-06-08 11:44:18 | INFO | [MISS] from='MG Road'            to='HSR Layout'         algo=astar result=25min speed=0.0270ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='MG Road'            to='HSR Layout'         algo=astar result=25min speed=0.0022ms
+2026-06-08 11:44:18 | INFO | [MISS] from='Hebbal'             to='Electronic City'    algo=astar result=60min speed=0.0193ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='Hebbal'             to='Electronic City'    algo=astar result=60min speed=0.0011ms
+2026-06-08 11:44:18 | INFO | [MISS] from='Rajajinagar'        to='BTM Layout'         algo=astar result=40min speed=0.0164ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='Rajajinagar'        to='BTM Layout'         algo=astar result=40min speed=0.0005ms
+2026-06-08 11:44:18 | INFO | [MISS] from='MG Road'            to='Yeshwanthpur'       algo=astar result=35min speed=0.0136ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='MG Road'            to='Yeshwanthpur'       algo=astar result=35min speed=0.0005ms
+2026-06-08 11:44:18 | INFO | [MISS] from='Majestic'           to='Whitefield'         algo=astar result=34min speed=0.0109ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='Majestic'           to='Whitefield'         algo=astar result=34min speed=0.0005ms
+2026-06-08 11:44:18 | INFO | [MISS] from='MG Road'            to='HSR Layout'         algo=astar result=25min speed=0.0125ms
+2026-06-08 11:44:18 | INFO | [MISS] from='MG Road'            to='BTM Layout'         algo=astar result=20min speed=0.0092ms
+2026-06-08 11:44:18 | INFO | [MISS] from='Hebbal'             to='Electronic City'    algo=astar result=60min speed=0.0112ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='MG Road'            to='HSR Layout'         algo=astar result=25min speed=0.0005ms
+2026-06-08 11:44:18 | INFO | [MISS] from='Rajajinagar'        to='BTM Layout'         algo=astar result=40min speed=0.0150ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='MG Road'            to='BTM Layout'         algo=astar result=20min speed=0.0004ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='MG Road'            to='HSR Layout'         algo=astar result=25min speed=0.0005ms
+2026-06-08 11:44:18 | INFO | [MISS] from='Majestic'           to='Whitefield'         algo=astar result=34min speed=0.0119ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='MG Road'            to='HSR Layout'         algo=astar result=25min speed=0.0004ms
+2026-06-08 11:44:18 | INFO | [HIT ] from='Hebbal'             to='Electronic City'    algo=astar result=60min speed=0.0003ms
