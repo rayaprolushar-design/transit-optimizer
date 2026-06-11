@@ -1,0 +1,25 @@
+{
+  "model_name": "Gradient Boosting",
+  "feature_cols": [
+    "stop_sequence_norm",
+    "hour",
+    "is_rush_hour",
+    "is_weekend",
+    "day_of_week",
+    "route_type",
+    "n_stops_on_trip",
+    "prior_stop_delay",
+    "temp_deviation",
+    "route_frequency"
+  ],
+  "val_mae": 0.756,
+  "val_rmse": 0.975,
+  "val_r2": 0.846,
+  "test_mae": 0.767,
+  "test_rmse": 1.018,
+  "test_r2": 0.832,
+  "cv_mae_mean": 0.797,
+  "cv_mae_std": 0.007,
+  "n_train": 9072,
+  "n_features": 10
+}
