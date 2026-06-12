@@ -1,5 +1,5 @@
 {
-  "model_name": "Gradient Boosting",
+  "model_name": "Tuned GradientBoosting",
   "feature_cols": [
     "stop_sequence_norm",
     "hour",
@@ -12,14 +12,26 @@
     "temp_deviation",
     "route_frequency"
   ],
-  "val_mae": 0.756,
-  "val_rmse": 0.975,
-  "val_r2": 0.846,
-  "test_mae": 0.767,
-  "test_rmse": 1.018,
-  "test_r2": 0.832,
-  "cv_mae_mean": 0.797,
-  "cv_mae_std": 0.007,
+  "first_stop_features": [
+    "hour",
+    "is_rush_hour",
+    "is_weekend",
+    "day_of_week",
+    "route_type",
+    "n_stops_on_trip",
+    "temp_deviation",
+    "route_frequency"
+  ],
+  "val_mae": 0.7445,
+  "val_rmse": 0.9677,
+  "val_r2": 0.848,
+  "test_mae": 0.7625,
+  "test_rmse": 1.0064,
+  "test_r2": 0.8357,
+  "cv_mae_mean": 0.7941,
+  "cv_mae_std": 0.0092,
   "n_train": 9072,
-  "n_features": 10
+  "n_features": 10,
+  "week14_test_mae": 0.767,
+  "improvement_pct": 0.59
 }
