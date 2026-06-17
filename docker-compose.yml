@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"        # host:container
+    volumes:
+      - ./logs:/app/logs   # persist logs outside container
+    environment:
+      - PYTHONUNBUFFERED=1 # show logs immediately (no buffering)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+# Usage:
+#   docker compose up --build    ← build image and start
+#   docker compose up -d         ← run in background
+#   docker compose logs -f       ← tail logs
+#   docker compose down          ← stop

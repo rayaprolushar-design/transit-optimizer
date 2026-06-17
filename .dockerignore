@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+.dockerignore
+venv/
+.venv/
+data/delay_features.csv
+data/gtfs/
+logs/
+.pytest_cache/
+.coverage

@@ -1,19 +1,35 @@
-# Python cache files
+# Python
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Virtual environment files
+# Virtual environments
+venv/
 .venv/
 env/
-venv/
 ENV/
 
-# Data and logs directories
-logs/
-*.log
-
-# Editor files
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 .DS_Store
+
+# Logs (don't commit logs)
+logs/*.log
+
+# Large data files (commit only the trained model + graph)
+data/delay_features.csv
+data/gtfs/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
