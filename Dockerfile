@@ -37,10 +37,10 @@ EXPOSE 8000
 
 # Health check — Railway uses this to confirm the container is alive
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"
+  CMD python -c "import urllib.request, os; port = os.environ.get('PORT', '8000'); urllib.request.urlopen('http://localhost:' + port + '/')"
 
 # Start the server
 # --host 0.0.0.0  → listen on all interfaces (required in containers)
-# --port 8000     → matches EXPOSE above
+# --port $PORT    → dynamic port assignment for Railway (defaults to 8000)
 # --workers 2     → 2 processes for concurrent requests
-CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD uvicorn api.server:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2
