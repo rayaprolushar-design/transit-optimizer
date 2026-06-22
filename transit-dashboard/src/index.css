@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg-base: #0B0F19;
+    --color-bg-card: #151D30;
+    --color-border: #1E293B;
+  }
+
+  body {
+    background-color: var(--color-bg-base);
+    color: #F8FAFC;
+    overflow-y: auto;
+  }
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(21, 29, 48, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-hover:hover {
+  background: rgba(21, 29, 48, 0.85);
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: 0 12px 40px 0 rgba(0, 229, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0B0F19;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3B82F6;
+}
+
+/* Pulse Glow Keyframe */
+@keyframes neon-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(0, 229, 255, 0.5);
+  }
+}
+
+.animate-neon-glow {
+  animation: neon-glow-pulse 3s infinite;
+}
+
+/* Fade-in transitions */
+.fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hide leaflet control attribution */
+.leaflet-control-attribution {
+  display: none !important;
+}
+
+/* Custom Leaflet Map styling to fit dark theme */
+.leaflet-container {
+  background: #0B0F19 !important;
+  border-radius: 0.75rem;
+}
+.leaflet-tile {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+.leaflet-bar a {
+  background-color: #151D30 !important;
+  color: #F8FAFC !important;
+  border-bottom: 1px solid #1E293B !important;
+}
+.leaflet-bar a:hover {
+  background-color: #1E293B !important;
+  color: #00E5FF !important;
+}

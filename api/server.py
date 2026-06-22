@@ -27,7 +27,7 @@ from typing import Optional
 
 import joblib
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -159,6 +159,45 @@ app.add_middleware(
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
+# ── WebSockets Telemetry ─────────────────────────────────────────────────────
+
+active_connections: list[WebSocket] = []
+
+async def broadcast_event(event: dict):
+    for connection in list(active_connections):
+        try:
+            await connection.send_json(event)
+        except Exception:
+            if connection in active_connections:
+                active_connections.remove(connection)
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if websocket in active_connections:
+            active_connections.remove(websocket)
+
+async def _broadcast_prediction(req: DelayRequest, stop_name: str, pred_delay: float, cached: bool):
+    event = {
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+        "stop_id": req.stop_id,
+        "stop_name": stop_name,
+        "predicted_delay": pred_delay,
+        "confidence": _confidence(pred_delay, state.model_meta["test_mae"]),
+        "route_type": "Metro" if req.route_type == 1 else "Bus",
+        "hour": req.hour,
+        "is_weekend": bool(req.is_weekend),
+        "cached": cached,
+    }
+    await broadcast_event(event)
+
 
 @app.middleware("http")
 async def count_requests(request: Request, call_next):
@@ -243,6 +282,7 @@ async def get_route(
         "nodes_visited": result["nodes_visited"],
         "elapsed_ms":    round(result["elapsed_ms"], 4),
         "cached":        False,
+        "path":          result.get("path", []),
         "directions":    directions,
     }
     state.route_cache.put(key, response)
@@ -259,6 +299,7 @@ async def predict_delay(req: DelayRequest):
               f"{req.prior_stop_delay:.1f}:{req.stop_sequence_norm:.2f}")
     cached = state.pred_cache.get(key)
     if cached is not None:
+        await _broadcast_prediction(req, stop["name"], cached, True)
         return DelayResponse(
             stop_id=req.stop_id, stop_name=stop["name"],
             predicted_delay=cached,
@@ -270,6 +311,7 @@ async def predict_delay(req: DelayRequest):
     pred = round(max(0.0, pred), 2)
     state.pred_cache.put(key, pred)
 
+    await _broadcast_prediction(req, stop["name"], pred, False)
     return DelayResponse(
         stop_id=req.stop_id, stop_name=stop["name"],
         predicted_delay=pred,
