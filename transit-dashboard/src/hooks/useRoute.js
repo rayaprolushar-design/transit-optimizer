@@ -28,5 +28,5 @@ export const useRoute = () => {
     setError(null);
   };
 
-  return { route, loading, error, calculateRoute, clearRoute };
+  return { route, result: route, loading, error, calculateRoute, search: calculateRoute, clearRoute };
 };

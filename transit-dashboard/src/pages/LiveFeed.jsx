@@ -1,21 +1,37 @@
 import React from 'react';
 import { Radio, ShieldAlert, Clock, RefreshCw, Sparkles, TrendingUp } from 'lucide-react';
 
-function LiveFeed({ messages, wsStatus }) {
-  // Compute session telemetry from the stream
+function LiveFeed({ messages = [], wsStatus }) {
+  // Normalize messages to handle both live delay predictions and simulated broadcast events
+  const normalizedMessages = React.useMemo(() => {
+    return messages.map(m => ({
+      timestamp: m.time || m.timestamp || '00:00',
+      route_type: m.route_type || (m.route?.toLowerCase().includes('metro') ? 'Metro' : 'Bus'),
+      route_name: m.route || m.route_type || 'Transit',
+      stop_name: m.stop || m.stop_name || 'Unknown Stop',
+      stop_id: m.stop_id || 'SIM',
+      predicted_delay: m.delay_minutes ?? m.predicted_delay ?? 0.0,
+      cached: m.cached ?? false,
+      confidence: m.severity || m.confidence || 'low',
+      hour: m.hour ?? (parseInt((m.time || '00').split(':')[0]) || 12),
+      is_weekend: m.is_weekend ?? false,
+    }));
+  }, [messages]);
+
+  // Compute session telemetry from the normalized stream
   const stats = React.useMemo(() => {
-    if (messages.length === 0) return { count: 0, avgDelay: 0, hitRate: 0 };
+    if (normalizedMessages.length === 0) return { count: 0, avgDelay: 0, hitRate: 0 };
     
-    const count = messages.length;
-    const totalDelay = messages.reduce((acc, m) => acc + m.predicted_delay, 0);
-    const cachedCount = messages.filter(m => m.cached).length;
+    const count = normalizedMessages.length;
+    const totalDelay = normalizedMessages.reduce((acc, m) => acc + m.predicted_delay, 0);
+    const cachedCount = normalizedMessages.filter(m => m.cached).length;
 
     return {
       count,
       avgDelay: parseFloat((totalDelay / count).toFixed(2)),
       hitRate: parseFloat(((cachedCount / count) * 100).toFixed(1))
     };
-  }, [messages]);
+  }, [normalizedMessages]);
 
   const getStatusBanner = () => {
     switch (wsStatus) {
@@ -102,7 +118,7 @@ function LiveFeed({ messages, wsStatus }) {
           Event Log Stream
         </h4>
 
-        {messages.length === 0 ? (
+        {normalizedMessages.length === 0 ? (
           <div className="bg-dark-850 border border-dark-800 rounded-2xl p-10 text-center glass-panel flex flex-col items-center justify-center space-y-4 min-h-[300px]">
             <div className="relative">
               <div className="absolute inset-0 bg-brand-primary/10 rounded-full blur-xl animate-pulse" />
@@ -111,13 +127,13 @@ function LiveFeed({ messages, wsStatus }) {
             <div>
               <h5 className="font-display font-bold text-slate-200">Awaiting Telemetry Feed</h5>
               <p className="text-xs text-slate-400 max-w-sm mx-auto mt-2 leading-relaxed font-medium">
-                Keep this browser window active and run delay predictions in the <strong className="text-brand-neonPurple">ML Predictor</strong> tab. Predictions will route to the websocket pipeline and display here instantly.
+                Keep this browser window active. The backend is configured to broadcast live delay simulation events every 5 seconds.
               </p>
             </div>
           </div>
         ) : (
           <div className="space-y-3.5">
-            {messages.map((msg, idx) => (
+            {normalizedMessages.map((msg, idx) => (
               <div
                 key={idx}
                 className="bg-dark-850 border border-dark-800 hover:border-dark-700/60 p-4 rounded-xl flex items-center justify-between gap-4 glass-panel transition-all hover:scale-[1.005] duration-200 shadow-sm fade-in-up relative overflow-hidden"
@@ -144,7 +160,7 @@ function LiveFeed({ messages, wsStatus }) {
                   <div className="min-w-0">
                     <h5 className="font-bold text-slate-200 text-sm truncate">{msg.stop_name}</h5>
                     <p className="text-[10px] text-slate-500 font-semibold mt-0.5 uppercase tracking-wide">
-                      ID: {msg.stop_id} &bull; Hour: {msg.hour}:00 &bull; {msg.is_weekend ? 'Weekend' : 'Weekday'}
+                      Line: {msg.route_name} &bull; Hour: {msg.hour}:00 &bull; {msg.is_weekend ? 'Weekend' : 'Weekday'}
                     </p>
                   </div>
                 </div>

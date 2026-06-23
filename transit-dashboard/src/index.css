@@ -107,3 +107,25 @@
   background-color: #1E293B !important;
   color: #00E5FF !important;
 }
+
+@layer components {
+  .card {
+    @apply bg-dark-850 border border-dark-800 rounded-2xl p-5 glass-panel;
+  }
+  .btn-primary {
+    @apply bg-gradient-to-r from-brand-primary to-brand-neonBlue text-slate-900 font-bold py-2.5 px-4 rounded-xl transition-all duration-300 shadow-neon-blue hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none text-xs font-semibold;
+  }
+  .badge {
+    @apply px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center;
+  }
+  .badge-blue {
+    @apply bg-brand-primary/10 text-brand-neonBlue border-brand-primary/20;
+  }
+  .badge-green {
+    @apply bg-brand-success/10 text-brand-success border-brand-success/20;
+  }
+  .badge-yellow {
+    @apply bg-brand-neonAmber/10 text-brand-neonAmber border-brand-neonAmber/20;
+  }
+}
+

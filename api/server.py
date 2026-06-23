@@ -27,7 +27,7 @@ from typing import Optional
 
 import joblib
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -83,7 +83,9 @@ def _load_resources():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _load_resources()
+    broadcaster_task = asyncio.create_task(_broadcast_delay_events())
     yield
+    broadcaster_task.cancel()
     log.info(f"Shutdown after {state.requests} requests")
 
 
@@ -158,45 +160,6 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
-
-# ── WebSockets Telemetry ─────────────────────────────────────────────────────
-
-active_connections: list[WebSocket] = []
-
-async def broadcast_event(event: dict):
-    for connection in list(active_connections):
-        try:
-            await connection.send_json(event)
-        except Exception:
-            if connection in active_connections:
-                active_connections.remove(connection)
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    active_connections.append(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        pass
-    finally:
-        if websocket in active_connections:
-            active_connections.remove(websocket)
-
-async def _broadcast_prediction(req: DelayRequest, stop_name: str, pred_delay: float, cached: bool):
-    event = {
-        "timestamp": datetime.now().strftime("%H:%M:%S"),
-        "stop_id": req.stop_id,
-        "stop_name": stop_name,
-        "predicted_delay": pred_delay,
-        "confidence": _confidence(pred_delay, state.model_meta["test_mae"]),
-        "route_type": "Metro" if req.route_type == 1 else "Bus",
-        "hour": req.hour,
-        "is_weekend": bool(req.is_weekend),
-        "cached": cached,
-    }
-    await broadcast_event(event)
 
 
 @app.middleware("http")
@@ -282,7 +245,6 @@ async def get_route(
         "nodes_visited": result["nodes_visited"],
         "elapsed_ms":    round(result["elapsed_ms"], 4),
         "cached":        False,
-        "path":          result.get("path", []),
         "directions":    directions,
     }
     state.route_cache.put(key, response)
@@ -299,7 +261,6 @@ async def predict_delay(req: DelayRequest):
               f"{req.prior_stop_delay:.1f}:{req.stop_sequence_norm:.2f}")
     cached = state.pred_cache.get(key)
     if cached is not None:
-        await _broadcast_prediction(req, stop["name"], cached, True)
         return DelayResponse(
             stop_id=req.stop_id, stop_name=stop["name"],
             predicted_delay=cached,
@@ -311,7 +272,6 @@ async def predict_delay(req: DelayRequest):
     pred = round(max(0.0, pred), 2)
     state.pred_cache.put(key, pred)
 
-    await _broadcast_prediction(req, stop["name"], pred, False)
     return DelayResponse(
         stop_id=req.stop_id, stop_name=stop["name"],
         predicted_delay=pred,
@@ -353,3 +313,75 @@ async def stats():
             "requests_served": state.requests,
         },
     }
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# WEBSOCKET — Week 22 live feed
+# Broadcasts simulated delay events every 5 seconds to all connected clients.
+#
+# Computer Networks concept:
+#   HTTP: client asks → server answers once → connection closes.
+#   WebSocket: client connects → both sides can send at any time → stays open.
+#   This is why dashboards use WebSockets for live data instead of polling.
+# ════════════════════════════════════════════════════════════════════════════════
+
+import asyncio
+import random
+from fastapi import WebSocket, WebSocketDisconnect
+
+# Track all active WebSocket connections
+_ws_clients: list[WebSocket] = []
+
+
+async def _broadcast_delay_events():
+    """Background task: push a simulated delay event every 5s."""
+    routes    = ["Route 5", "Route 12", "Route 27", "Route 33", "M1 Metro", "Route 41"]
+    stop_list = list(state.stops.values()) if state.stops else [{"name": "MG Road"}]
+
+    while True:
+        await asyncio.sleep(5)
+        if not _ws_clients:
+            continue
+
+        stop     = random.choice(stop_list)
+        route    = random.choice(routes)
+        delay    = round(random.uniform(-1, 8), 1)
+        severity = "high" if delay > 4 else "medium" if delay > 1 else "low"
+
+        event = {
+            "route":          route,
+            "stop":           stop.get("name", "Unknown"),
+            "delay_minutes":  max(0, delay),
+            "severity":       severity,
+            "time":           datetime.now().strftime("%H:%M"),
+        }
+
+        dead = []
+        for ws in _ws_clients:
+            try:
+                await ws.send_json(event)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            _ws_clients.remove(ws)
+
+
+# Broadcaster task is started inside the lifespan context manager
+
+
+@app.websocket("/ws/live-feed")
+async def ws_live_feed(websocket: WebSocket):
+    """
+    WebSocket endpoint — client connects and receives delay events every 5s.
+    Stays open until client disconnects or server shuts down.
+    """
+    await websocket.accept()
+    _ws_clients.append(websocket)
+    log.info(f"WebSocket connected — {len(_ws_clients)} total clients")
+    try:
+        while True:
+            # Keep alive — wait for client ping or disconnect
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        _ws_clients.remove(websocket)
+        log.info(f"WebSocket disconnected — {len(_ws_clients)} remaining")

@@ -9,7 +9,7 @@ import LiveFeed from './pages/LiveFeed';
 import { useWebSocket } from './hooks/useWebSocket';
 
 function App() {
-  const { messages, status } = useWebSocket('/ws');
+  const { messages, status } = useWebSocket('/ws/live-feed');
   const location = useLocation();
 
   const getPageDetails = () => {
