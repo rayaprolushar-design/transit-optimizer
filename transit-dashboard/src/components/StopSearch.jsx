@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, X } from 'lucide-react';
 
-function StopSearch({ stops, selectedStop, onChange, placeholder = 'Search stops...', label, id }) {
-  const [query, setQuery] = useState(selectedStop ? selectedStop.name : '');
+function StopSearch({ stops = [], selectedStop, value, onChange, placeholder = 'Search stops...', label, id, icon }) {
+  const initialValue = value !== undefined ? value : (selectedStop !== undefined ? selectedStop : '');
+  const initialString = typeof initialValue === 'object' && initialValue !== null ? initialValue.name : initialValue;
+
+  const [query, setQuery] = useState(initialString || '');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
 
   useEffect(() => {
-    setQuery(selectedStop ? selectedStop.name : '');
-  }, [selectedStop]);
+    const val = value !== undefined ? value : (selectedStop !== undefined ? selectedStop : '');
+    setQuery(typeof val === 'object' && val !== null ? val.name : val || '');
+  }, [value, selectedStop]);
 
   // Autocomplete matching (fuzzy search: match by name or ID)
   const filteredStops = query.trim() === ''
@@ -22,21 +26,33 @@ function StopSearch({ stops, selectedStop, onChange, placeholder = 'Search stops
     const handleClickOutside = (event) => {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
-        setQuery(selectedStop ? selectedStop.name : '');
+        const val = value !== undefined ? value : (selectedStop !== undefined ? selectedStop : '');
+        setQuery(typeof val === 'object' && val !== null ? val.name : val || '');
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [selectedStop]);
+  }, [value, selectedStop]);
 
   const handleSelect = (stop) => {
-    onChange(stop);
+    // Determine whether the parent component expects a string (name) or the full stop object.
+    // If value is provided (as in RoutePlanner.jsx), we pass stop.name (string).
+    // If selectedStop is provided (as in DelayPredictor.jsx), we pass the stop object.
+    if (value !== undefined) {
+      onChange?.(stop.name);
+    } else {
+      onChange?.(stop);
+    }
     setQuery(stop.name);
     setIsOpen(false);
   };
 
   const handleClear = () => {
-    onChange(null);
+    if (value !== undefined) {
+      onChange?.('');
+    } else {
+      onChange?.(null);
+    }
     setQuery('');
     setIsOpen(true);
   };
@@ -85,7 +101,7 @@ function StopSearch({ stops, selectedStop, onChange, placeholder = 'Search stops
             >
               <span className="text-sm font-semibold text-slate-200">{stop.name}</span>
               <span className="text-[10px] text-slate-500 font-semibold mt-0.5 uppercase tracking-wider">
-                {stop.stop_id} &bull; Lat: {stop.lat.toFixed(4)}, Lon: {stop.lon.toFixed(4)}
+                {stop.stop_id} &bull; Lat: {parseFloat(stop.lat).toFixed(4)}, Lon: {parseFloat(stop.lon).toFixed(4)}
               </span>
             </li>
           ))}
