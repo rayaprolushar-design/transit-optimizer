@@ -5,10 +5,6 @@
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
-  "env": {
-    "VITE_API_URL":  "@transit_api_url",
-    "VITE_WS_URL":   "@transit_ws_url"
-  },
   "headers": [
     {
       "source": "/assets/(.*)",
