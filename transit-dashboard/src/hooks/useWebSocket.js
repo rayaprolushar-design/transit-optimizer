@@ -8,10 +8,17 @@ export const useWebSocket = (urlPath = '/ws') => {
   const reconnectDelayRef = useRef(1000); // Start with 1s delay
 
   const connect = useCallback(() => {
-    // Resolve WebSocket URL based on current protocol and host
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}${urlPath}`;
+    let wsUrl = import.meta.env.VITE_WS_URL;
+    if (wsUrl) {
+      if (!wsUrl.includes('/ws/')) {
+        const base = wsUrl.replace(/\/$/, '');
+        wsUrl = `${base}${urlPath}`;
+      }
+    } else {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      wsUrl = `${protocol}//${host}${urlPath}`;
+    }
 
     setStatus('connecting');
     

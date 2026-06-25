@@ -20,6 +20,9 @@ export const useStops = () => {
         setLoading(true);
         // Request a higher limit to ensure we fetch all stops in the network
         const data = await getStops('', 200);
+        if (!Array.isArray(data)) {
+          throw new Error('Invalid API response: expected an array of stops');
+        }
         cachedStops = data;
         setStops(data);
         setError(null);
