@@ -1,395 +1,390 @@
-import React, { useState } from 'react';
-import { useStops } from '../hooks/useStops';
-import { predictDelay, getModelInfo } from '../api/client';
-import StopSearch from '../components/StopSearch';
-import ErrorBanner from '../components/ErrorBanner';
-import LoadingSpinner from '../components/LoadingSpinner';
-import { Brain, Clock, ShieldAlert, Cpu, Thermometer, Calendar, Settings } from 'lucide-react';
+/**
+ * pages/DelayPredictor.jsx — Week 21
+ * Interactive delay predictor with:
+ *   - Live-updating predictions as sliders move (debounced API calls)
+ *   - PredictionHistoryChart showing delay curve across all hours
+ *   - Feature importance mini-chart (what the model is using)
+ *   - Comparison card: rush hour vs off-peak vs weekend for the selected stop
+ *
+ * Key React concepts:
+ *   useCallback + debounce  — avoid hammering the API on every slider tick
+ *   useEffect dependency    — re-fetch when any input changes
+ *   derived state           — confidence, isRush computed from raw values
+ */
+import { useState, useEffect } from 'react'
+import { Brain, Info, TrendingUp } from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, Cell,
+} from 'recharts'
+import StopSearch             from '../components/StopSearch'
+import ErrorBanner            from '../components/ErrorBanner'
+import LoadingSpinner         from '../components/LoadingSpinner'
+import TopBar                 from '../components/TopBar'
+import PredictionHistoryChart from '../components/PredictionHistoryChart'
+import { useStops }           from '../hooks/useStops'
+import { api }                from '../api/client'
 
-function DelayPredictor() {
-  const { stops, loading: stopsLoading, error: stopsError } = useStops();
-  const [modelMeta, setModelMeta] = useState(null);
-  const [modelLoading, setModelLoading] = useState(false);
+// ── Feature importances from Week 15 model ────────────────────────────────────
+const FEATURE_IMPORTANCES = [
+  { name: 'prior_delay',  value: 94.8, color: '#1D9E75' },
+  { name: 'seq_norm',     value: 1.58, color: '#378ADD' },
+  { name: 'is_rush',      value: 0.87, color: '#EF9F27' },
+  { name: 'hour',         value: 0.85, color: '#EF9F27' },
+  { name: 'temp_dev',     value: 0.82, color: '#6b7280' },
+  { name: 'route_type',   value: 0.71, color: '#6b7280' },
+]
 
-  // Form Fields
-  const [selectedStop, setSelectedStop] = useState(null);
-  const [hour, setHour] = useState(new Date().getHours());
-  const [isWeekend, setIsWeekend] = useState(0);
-  const [priorStopDelay, setPriorStopDelay] = useState(0);
-  const [tempDeviation, setTempDeviation] = useState(0.0);
-  const [stopSequenceNorm, setStopSequenceNorm] = useState(0.5);
-  const [routeType, setRouteType] = useState(3); // 3=Bus, 1=Metro
-  const [nStopsOnTrip, setNStopsOnTrip] = useState(6);
-
-  // States
-  const [prediction, setPrediction] = useState(null);
-  const [predictLoading, setPredictLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  React.useEffect(() => {
-    const loadModelMeta = async () => {
-      setModelLoading(true);
-      try {
-        const data = await getModelInfo();
-        setModelMeta(data);
-      } catch (err) {
-        console.error('Failed to load model meta:', err);
-      } finally {
-        setModelLoading(false);
-      }
-    };
-    loadModelMeta();
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!selectedStop) {
-      setError('Please select a stop to predict delay');
-      return;
-    }
-
-    setPredictLoading(true);
-    setError(null);
-    setPrediction(null);
-
-    const payload = {
-      stop_id: selectedStop.stop_id,
-      hour: parseInt(hour),
-      is_weekend: parseInt(isWeekend),
-      prior_stop_delay: parseFloat(priorStopDelay) || 0.0,
-      temp_deviation: parseFloat(tempDeviation) || 0.0,
-      stop_sequence_norm: parseFloat(stopSequenceNorm) || 0.0,
-      route_type: parseInt(routeType),
-      n_stops_on_trip: parseInt(nStopsOnTrip) || 1,
-    };
-
-    try {
-      const data = await predictDelay(payload);
-      setPrediction(data);
-    } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Delay prediction failed');
-    } finally {
-      setPredictLoading(false);
-    }
-  };
-
-  const getConfidenceBadge = (confidence) => {
-    switch (confidence) {
-      case 'high':
-        return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.15)]';
-      case 'medium':
-        return 'bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.15)]';
-      case 'low':
-      default:
-        return 'bg-rose-500/10 text-rose-400 border border-rose-500/20 shadow-[0_0_10px_rgba(244,63,94,0.15)]';
-    }
-  };
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 h-full max-w-[1600px] mx-auto fade-in-up">
-      {/* Input Parameters Form */}
-      <div className="lg:col-span-7 flex flex-col gap-6">
-        <div className="bg-dark-850 border border-dark-800 rounded-2xl p-6 glass-panel">
-          <h3 className="font-display font-bold text-lg text-slate-100 mb-5 flex items-center gap-2">
-            <Brain className="w-5 h-5 text-brand-neonPurple" />
-            ML Feature Parameters
-          </h3>
-
-          {(stopsError || error) && (
-            <div className="mb-4">
-              <ErrorBanner message={stopsError || error} onDismiss={() => setError(null)} />
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Stop Selector */}
-            <StopSearch
-              id="predict-stop"
-              stops={stops}
-              selectedStop={selectedStop}
-              onChange={setSelectedStop}
-              placeholder="Search stop to analyze..."
-              label="Stop to Predict"
-            />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Hour of Day */}
-              <div>
-                <label htmlFor="hour" className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider block">
-                  Hour of Day (0-23)
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="hour"
-                    type="number"
-                    min="0"
-                    max="23"
-                    value={hour}
-                    onChange={(e) => setHour(e.target.value)}
-                    className="w-full bg-dark-900 border border-dark-800 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-neonPurple/50 focus:ring-1 focus:ring-brand-neonPurple/50 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Day Type Toggle */}
-              <div>
-                <label className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider block">
-                  Day of Week
-                </label>
-                <div className="flex bg-dark-900 p-1 rounded-xl border border-dark-800 h-[46px] items-center">
-                  <button
-                    type="button"
-                    onClick={() => setIsWeekend(0)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                      isWeekend === 0
-                        ? 'bg-brand-neonPurple text-white shadow-sm shadow-neon-purple'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Weekday
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsWeekend(1)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                      isWeekend === 1
-                        ? 'bg-brand-neonPurple text-white shadow-sm shadow-neon-purple'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Weekend
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Prior Delay */}
-              <div>
-                <label htmlFor="prior-delay" className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider block">
-                  Prior Stop Delay (minutes)
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <ShieldAlert className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="prior-delay"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={priorStopDelay}
-                    onChange={(e) => setPriorStopDelay(e.target.value)}
-                    className="w-full bg-dark-900 border border-dark-800 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-100 focus:outline-none focus:border-brand-neonPurple/50 focus:ring-1 focus:ring-brand-neonPurple/50 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Temperature Deviation */}
-              <div>
-                <label htmlFor="temp-dev" className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider block">
-                  Temp Deviation from Avg (&deg;C)
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Thermometer className="w-4 h-4" />
-                  </div>
-                  <input
-                    id="temp-dev"
-                    type="number"
-                    step="0.1"
-                    value={tempDeviation}
-                    onChange={(e) => setTempDeviation(e.target.value)}
-                    className="w-full bg-dark-900 border border-dark-800 rounded-xl py-3 pl-10 pr-4 text-sm text-slate-100 focus:outline-none focus:border-brand-neonPurple/50 focus:ring-1 focus:ring-brand-neonPurple/50 transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Route Type */}
-              <div>
-                <label className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider block">
-                  Transit Mode
-                </label>
-                <div className="flex bg-dark-900 p-1 rounded-xl border border-dark-800 h-[46px] items-center">
-                  <button
-                    type="button"
-                    onClick={() => setRouteType(3)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                      routeType === 3
-                        ? 'bg-brand-neonPurple text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Bus
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRouteType(1)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                      routeType === 1
-                        ? 'bg-brand-neonPurple text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Metro
-                  </button>
-                </div>
-              </div>
-
-              {/* Stop Sequence Norm */}
-              <div>
-                <label htmlFor="stop-seq" className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider block">
-                  Stop Position (0.0 - 1.0)
-                </label>
-                <input
-                  id="stop-seq"
-                  type="number"
-                  step="0.05"
-                  min="0.0"
-                  max="1.0"
-                  value={stopSequenceNorm}
-                  onChange={(e) => setStopSequenceNorm(e.target.value)}
-                  className="w-full bg-dark-900 border border-dark-800 rounded-xl py-3 px-4 text-sm text-slate-100 focus:outline-none focus:border-brand-neonPurple/50 focus:ring-1 focus:ring-brand-neonPurple/50 transition-all h-[46px]"
-                />
-              </div>
-
-              {/* Stops on Trip */}
-              <div>
-                <label htmlFor="stops-on-trip" className="text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider block">
-                  Total Stops on Trip
-                </label>
-                <input
-                  id="stops-on-trip"
-                  type="number"
-                  min="1"
-                  value={nStopsOnTrip}
-                  onChange={(e) => setNStopsOnTrip(e.target.value)}
-                  className="w-full bg-dark-900 border border-dark-800 rounded-xl py-3 px-4 text-sm text-slate-100 focus:outline-none focus:border-brand-neonPurple/50 focus:ring-1 focus:ring-brand-neonPurple/50 transition-all h-[46px]"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={stopsLoading || predictLoading || !selectedStop}
-              className="w-full bg-gradient-to-r from-brand-neonPurple to-brand-neonPink text-white font-bold py-3.5 rounded-xl transition-all duration-300 shadow-neon-purple hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none text-sm flex items-center justify-center gap-2"
-            >
-              <Brain className="w-4.5 h-4.5" />
-              Generate Delay Prediction
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {/* Results Display Panel */}
-      <div className="lg:col-span-5 flex flex-col gap-6">
-        {/* Loading details */}
-        {predictLoading && <LoadingSpinner message="Calculating ML delay prediction..." />}
-
-        {/* Prediction Results */}
-        {prediction && !predictLoading && (
-          <div className="bg-dark-850 border border-dark-800 rounded-2xl p-6 glass-panel flex flex-col items-center justify-center space-y-6 fade-in-up">
-            <div className="w-16 h-16 rounded-2xl bg-brand-neonPurple/10 border border-brand-neonPurple/20 flex items-center justify-center text-brand-neonPurple shadow-neon-purple">
-              <Clock className="w-9 h-9" />
-            </div>
-
-            <div className="text-center space-y-1">
-              <h4 className="font-display font-bold text-slate-100 text-lg">
-                {prediction.stop_name}
-              </h4>
-              <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest">
-                ID: {prediction.stop_id}
-              </p>
-            </div>
-
-            <div className="text-center space-y-1 relative">
-              {/* Glow backdrop */}
-              <div className="absolute inset-0 filter blur-xl opacity-30 bg-brand-neonPurple animate-pulse" />
-              <span className="text-6xl font-display font-extrabold text-white tracking-tight relative">
-                {prediction.predicted_delay.toFixed(1)}
-              </span>
-              <span className="text-sm font-semibold text-slate-400 block relative">
-                minutes expected delay
-              </span>
-            </div>
-
-            {/* Confidence & Cache status */}
-            <div className="flex gap-3 justify-center w-full">
-              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${getConfidenceBadge(prediction.confidence)}`}>
-                {prediction.confidence} Confidence
-              </span>
-
-              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
-                prediction.cached 
-                  ? 'bg-brand-neonBlue/10 text-brand-neonBlue border-brand-neonBlue/20' 
-                  : 'bg-slate-800 text-slate-400 border-dark-700'
-              }`}>
-                {prediction.cached ? 'CACHE HIT' : 'API EVAL'}
-              </span>
-            </div>
-
-            {/* Model Evaluation Info */}
-            <div className="w-full border-t border-dark-800/60 pt-4 space-y-2">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-400">Model Mean Absolute Error</span>
-                <span className="text-slate-200 font-bold">{prediction.model_mae.toFixed(3)} min</span>
-              </div>
-              {modelMeta && (
-                <>
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-400">Model Architecture</span>
-                    <span className="text-slate-200 font-bold truncate max-w-[200px]">{modelMeta.model_name}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-400">Test R&sup2; Score</span>
-                    <span className="text-slate-200 font-bold">{(modelMeta.test_r2 * 100).toFixed(1)}%</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Info card if no prediction has been generated */}
-        {!prediction && !predictLoading && (
-          <div className="bg-dark-850 border border-dark-800 rounded-2xl p-6 glass-panel flex flex-col items-center justify-center text-center space-y-4 h-full min-h-[300px]">
-            <Settings className="w-10 h-10 text-brand-neonPurple animate-spin" style={{ animationDuration: '6s' }} />
-            <div>
-              <h4 className="font-display font-bold text-slate-200">Prediction Telemetry</h4>
-              <p className="text-xs text-slate-400 mt-2 leading-relaxed max-w-xs mx-auto">
-                Modify features in the parameters panel and trigger the prediction request. The ML pipeline will resolve arrival delays based on historical telemetry.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Model Metadata summary card */}
-        {modelMeta && (
-          <div className="bg-dark-850 border border-dark-800 rounded-2xl p-5 glass-panel space-y-3.5">
-            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-brand-neonPink animate-pulse" />
-              ML Model Registry
-            </h4>
-            <div className="grid grid-cols-2 gap-3 text-[11px] font-medium text-slate-400">
-              <div className="bg-dark-900/40 p-3 rounded-xl border border-dark-800">
-                <span className="block text-slate-500 mb-0.5">TRAIN ROWS</span>
-                <span className="text-slate-200 font-bold">{modelMeta.n_train.toLocaleString()}</span>
-              </div>
-              <div className="bg-dark-900/40 p-3 rounded-xl border border-dark-800">
-                <span className="block text-slate-500 mb-0.5">CV MAE MEAN</span>
-                <span className="text-slate-200 font-bold">{modelMeta.cv_mae_mean.toFixed(3)}</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+const CONF_STYLES = {
+  high:   { badge: 'badge-green',  label: 'High confidence',   icon: '✓' },
+  medium: { badge: 'badge-yellow', label: 'Medium confidence',  icon: '~' },
+  low:    { badge: 'badge-red',    label: 'Low confidence',     icon: '!' },
 }
 
-export default DelayPredictor;
+// Simple debounce hook
+function useDebounce(value, delay) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
+}
+
+export default function DelayPredictor() {
+  const { stops } = useStops()
+
+  // ── Input state ───────────────────────────────────────────────────────────
+  const [stopName,   setStopName]   = useState('')
+  const [hour,       setHour]       = useState(8)
+  const [isWeekend,  setIsWeekend]  = useState(false)
+  const [priorDelay, setPriorDelay] = useState(0)
+  const [seqNorm,    setSeqNorm]    = useState(0)
+  const [routeType,  setRouteType]  = useState(3)
+
+  // ── Output state ──────────────────────────────────────────────────────────
+  const [result,   setResult]   = useState(null)
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState(null)
+  const [compares, setCompares] = useState(null)  // rush/offpeak/weekend compare
+
+  // Debounce slider inputs so we don't spam the API
+  const dHour       = useDebounce(hour, 300)
+  const dPriorDelay = useDebounce(priorDelay, 300)
+  const dSeqNorm    = useDebounce(seqNorm, 300)
+
+  const selectedStop = stops.find(s => s.name === stopName)
+
+  const predict = async (stopId, h, weekend, prior, seq, rtype) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.predictDelay({
+        stop_id:            stopId,
+        hour:               h,
+        is_weekend:         weekend,
+        prior_stop_delay:   prior,
+        temp_deviation:     0.5,
+        stop_sequence_norm: seq,
+        route_type:         rtype,
+        n_stops_on_trip:    6,
+      })
+      setResult(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Auto-predict when inputs change ───────────────────────────────────────
+  useEffect(() => {
+    if (!selectedStop) return
+    predict(selectedStop.stop_id, dHour, isWeekend ? 1 : 0, dPriorDelay, dSeqNorm, routeType)
+  }, [selectedStop, dHour, isWeekend, dPriorDelay, dSeqNorm, routeType])
+
+  // ── Comparison predictions (rush / off-peak / weekend) ────────────────────
+  useEffect(() => {
+    if (!selectedStop) return
+    const sid = selectedStop.stop_id
+    Promise.all([
+      api.predictDelay({ stop_id: sid, hour: 8,  is_weekend: 0, prior_stop_delay: 0, temp_deviation: 0.5, stop_sequence_norm: 0, route_type: routeType, n_stops_on_trip: 6 }),
+      api.predictDelay({ stop_id: sid, hour: 14, is_weekend: 0, prior_stop_delay: 0, temp_deviation: 0.5, stop_sequence_norm: 0, route_type: routeType, n_stops_on_trip: 6 }),
+      api.predictDelay({ stop_id: sid, hour: 10, is_weekend: 1, prior_stop_delay: 0, temp_deviation: 0.5, stop_sequence_norm: 0, route_type: routeType, n_stops_on_trip: 6 }),
+    ]).then(([rush, offpeak, weekend]) => {
+      setCompares({ rush, offpeak, weekend })
+    }).catch(() => {})
+  }, [selectedStop, routeType])
+
+  const isRush = (hour >= 7 && hour <= 10) || (hour >= 17 && hour <= 20)
+  const conf   = result ? CONF_STYLES[result.confidence] : null
+
+  return (
+    <div>
+      <TopBar
+        title="Delay Predictor"
+        subtitle="Gradient Boosting model · MAE ≈ 0.76 min · predicts live as you drag"
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 items-start mt-4">
+
+        {/* ── LEFT: Controls ──────────────────────────────────────── */}
+        <div className="space-y-3">
+          <div className="card">
+            <p className="card-title text-sm font-bold text-slate-200">Inputs</p>
+
+            {/* Stop picker */}
+            <div className="mb-4">
+              <label className="block text-xs text-gray-500 mb-1.5">Stop</label>
+              <StopSearch
+                stops={stops}
+                value={stopName}
+                onChange={setStopName}
+                placeholder="Select a stop…"
+              />
+            </div>
+
+            {/* Route type */}
+            <div className="mb-4">
+              <label className="block text-xs text-gray-500 mb-1.5">Route type</label>
+              <div className="flex gap-2">
+                {[{ v: 3, l: '🚌 Bus' }, { v: 1, l: '🚇 Metro' }].map(({ v, l }) => (
+                  <button
+                    key={v}
+                    onClick={() => setRouteType(v)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors
+                      ${routeType === v
+                        ? 'bg-brand-500/20 text-brand-400 border-brand-500/40'
+                        : 'text-gray-500 border-gray-700 hover:text-gray-300'}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Hour slider */}
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs text-gray-500">Hour of departure</label>
+                <div className="flex items-center gap-2">
+                  <span className={`badge text-[11px] ${isRush ? 'badge-red' : 'badge-green'}`}>
+                    {isRush ? '⚠ Rush' : 'Off-peak'}
+                  </span>
+                  <span className="font-mono text-sm text-gray-300">
+                    {String(hour).padStart(2, '0')}:00
+                  </span>
+                </div>
+              </div>
+              <input
+                type="range" min="0" max="23" step="1" value={hour}
+                onChange={e => setHour(Number(e.target.value))}
+                className="w-full accent-brand-500 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-gray-600 mt-1">
+                <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span>
+              </div>
+            </div>
+
+            {/* Prior delay slider */}
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs text-gray-500">Prior stop delay</label>
+                <span className="font-mono text-sm text-gray-300">{priorDelay} min</span>
+              </div>
+              <input
+                type="range" min="0" max="15" step="0.5" value={priorDelay}
+                onChange={e => setPriorDelay(Number(e.target.value))}
+                className="w-full accent-brand-500 cursor-pointer"
+              />
+              <p className="text-[10px] text-gray-600 mt-1 leading-relaxed">
+                Delay at the previous stop — strongest predictor (r=0.89)
+              </p>
+            </div>
+
+            {/* Seq norm slider */}
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs text-gray-500">Position in trip</label>
+                <span className="font-mono text-sm text-gray-300">
+                  {seqNorm === 0 ? 'First stop' : seqNorm === 1 ? 'Last stop' : `${Math.round(seqNorm * 100)}%`}
+                </span>
+              </div>
+              <input
+                type="range" min="0" max="1" step="0.1" value={seqNorm}
+                onChange={e => setSeqNorm(Number(e.target.value))}
+                className="w-full accent-brand-500 cursor-pointer"
+              />
+            </div>
+
+            {/* Weekend toggle */}
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div
+                onClick={() => setIsWeekend(w => !w)}
+                className={`relative w-10 h-5 rounded-full transition-colors
+                  ${isWeekend ? 'bg-brand-primary' : 'bg-gray-700'}`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow
+                                 transition-transform duration-200
+                                 ${isWeekend ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </div>
+              <span className="text-sm text-gray-300">Weekend</span>
+              {isWeekend && <span className="text-xs text-teal-400">~38% less delay</span>}
+            </label>
+          </div>
+
+          {/* Error */}
+          {error && <ErrorBanner message={error} />}
+
+          {/* Comparison card */}
+          {compares && (
+            <div className="card">
+              <p className="card-title text-sm font-bold text-slate-200">Compare scenarios</p>
+              {[
+                { label: '🚨 Rush hour (08:00)',  val: compares.rush?.predicted_delay,    color: 'text-red-400' },
+                { label: '😌 Off-peak (14:00)',   val: compares.offpeak?.predicted_delay, color: 'text-yellow-400' },
+                { label: '🌤 Weekend (10:00)',     val: compares.weekend?.predicted_delay, color: 'text-teal-400' },
+              ].map(({ label, val, color }) => (
+                <div key={label}
+                  className="flex items-center justify-between py-2.5 border-b border-gray-800 last:border-0 text-sm">
+                  <span className="text-gray-400">{label}</span>
+                  <span className={`font-mono font-medium ${color}`}>
+                    {val != null ? `${val} min` : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── RIGHT: Result + charts ───────────────────────────────── */}
+        <div className="space-y-4">
+
+          {/* Big prediction result */}
+          <div className="card">
+            {!selectedStop ? (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-600">
+                <Brain className="w-12 h-12 mb-3 opacity-20" />
+                <p className="text-sm">Select a stop to see predictions</p>
+                <p className="text-xs mt-1">Predictions update live as you drag the sliders</p>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">{result?.stop_name ?? stopName}</p>
+                    <div className="flex items-baseline gap-2">
+                      {loading ? (
+                        <div className="h-12 flex items-center">
+                          <LoadingSpinner text="Predicting…" />
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-5xl font-semibold font-mono text-gray-100">
+                            {result?.predicted_delay ?? '—'}
+                          </span>
+                          <span className="text-xl text-gray-500">min delay</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {conf && !loading && (
+                    <div className="text-right">
+                      <span className={`badge ${conf.badge} text-sm px-3 py-1.5`}>
+                        {conf.icon} {conf.label}
+                      </span>
+                      {result?.cached && (
+                        <p className="text-[10px] text-teal-600 mt-1">⚡ cached</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Input summary pills */}
+                <div className="flex flex-wrap gap-1.5 text-[11px]">
+                  <span className="badge badge-blue font-mono">
+                    {String(hour).padStart(2,'0')}:00
+                  </span>
+                  {isRush && <span className="badge badge-red">Rush hour</span>}
+                  {isWeekend && <span className="badge badge-green">Weekend</span>}
+                  <span className="badge text-gray-500 bg-gray-800 border-gray-700">
+                    Prior: {priorDelay}m
+                  </span>
+                  <span className="badge text-gray-500 bg-gray-800 border-gray-700">
+                    {routeType === 1 ? 'Metro' : 'Bus'}
+                  </span>
+                  <span className="badge text-gray-500 bg-gray-800 border-gray-700">
+                    MAE ±{result?.model_mae ?? '0.76'}m
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Prediction history chart */}
+          <div className="card">
+            <p className="card-title flex items-center gap-1.5 text-sm font-bold text-slate-200">
+              <TrendingUp className="w-3.5 h-3.5 text-brand-neonBlue" />
+              Delay curve — all hours
+            </p>
+            <PredictionHistoryChart hour={hour} routeType={routeType} />
+          </div>
+
+          {/* Feature importance mini chart */}
+          <div className="card">
+            <p className="card-title flex items-center gap-1.5 text-sm font-bold text-slate-200">
+              <Info className="w-3.5 h-3.5 text-brand-neonPurple" />
+              What the model is using
+            </p>
+            <p className="text-xs text-gray-600 mb-3">
+              Feature importances from Random Forest (Week 14)
+            </p>
+            <ResponsiveContainer width="100%" height={130}>
+              <BarChart
+                data={FEATURE_IMPORTANCES}
+                layout="vertical"
+                margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
+              >
+                <XAxis
+                  type="number"
+                  tick={{ fill: '#4b5563', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  unit="%"
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fill: '#9ca3af', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={72}
+                />
+                <Tooltip
+                  formatter={v => [`${v}%`, 'Importance']}
+                  contentStyle={{
+                    background: '#1f2937',
+                    border: '1px solid #374151',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  cursor={{ fill: '#ffffff06' }}
+                />
+                <Bar dataKey="value" radius={[0, 3, 3, 0]} barSize={14}>
+                  {FEATURE_IMPORTANCES.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">
+              prior_delay dominates at 94.8% — delay propagates stop-to-stop.
+              At first stop (seq=0), temporal features take over.
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  )
+}
