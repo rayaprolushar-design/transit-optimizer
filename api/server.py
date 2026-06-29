@@ -32,11 +32,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 
 import sys
+import os
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.router import find_route, build_directions
 from scripts.search import fuzzy_find_stop
 from scripts.week9_performance import LRUCache
+
+try:
+    from scripts.gps_tracker import live_store, run_live_feed
+    GPS_AVAILABLE = True
+except ImportError:
+    GPS_AVAILABLE = False
+    live_store = None
+
+USE_REAL_GPS = os.getenv("USE_REAL_GPS", "0") == "1"
 
 GRAPH_PATH = Path("data/graph_with_transfers.json")
 MODEL_PATH = Path("data/delay_model.joblib")
@@ -84,8 +94,21 @@ def _load_resources():
 async def lifespan(app: FastAPI):
     _load_resources()
     broadcaster_task = asyncio.create_task(_broadcast_delay_events())
+    gps_task = None
+    if GPS_AVAILABLE and state.stops and state.graph:
+        gps_task = asyncio.create_task(
+            run_live_feed(
+                state.stops,
+                state.graph,
+                use_real_api=USE_REAL_GPS,
+                poll_interval=10,
+            )
+        )
+        log.info(f"GPS tracker started (real={'yes' if USE_REAL_GPS else 'no, simulation'})")
     yield
     broadcaster_task.cancel()
+    if gps_task:
+        gps_task.cancel()
     log.info(f"Shutdown after {state.requests} requests")
 
 
@@ -222,12 +245,14 @@ async def get_route(
     if sid == eid:
         raise HTTPException(400, "Start and destination are the same stop")
 
-    key    = f"{sid}:{eid}:{algorithm}:{transfers}"
+    live_delays = live_store.all_delays() if (GPS_AVAILABLE and live_store) else None
+    delays_str = ",".join(f"{k}:{v}" for k, v in sorted(live_delays.items())) if live_delays else ""
+    key    = f"{sid}:{eid}:{algorithm}:{transfers}:{delays_str}"
     cached = state.route_cache.get(key)
     if cached:
         return {**cached, "cached": True}
 
-    result = find_route(state.graph, state.stops, sid, eid, algorithm)
+    result = find_route(state.graph, state.stops, sid, eid, algorithm, live_delays=live_delays)
     if not result["found"]:
         raise HTTPException(404, f"No route found from '{sname}' to '{ename}'")
 
@@ -256,6 +281,19 @@ async def predict_delay(req: DelayRequest):
     stop = state.stops.get(req.stop_id)
     if not stop:
         raise HTTPException(404, f"Stop '{req.stop_id}' not found")
+
+    if req.prior_stop_delay == 0.0 and GPS_AVAILABLE and live_store:
+        predecessors = []
+        for u, neighbors in state.graph.items():
+            if req.stop_id in neighbors:
+                if neighbors[req.stop_id].get("route") != "WALK":
+                    predecessors.append(u)
+        
+        valid_delays = [live_store.get_delay(p) for p in predecessors]
+        valid_delays = [d for d in valid_delays if d is not None]
+        if valid_delays:
+            req.prior_stop_delay = round(sum(valid_delays) / len(valid_delays), 2)
+            log.info(f"Seeded prior_stop_delay for {req.stop_id} as {req.prior_stop_delay} from predecessors")
 
     key    = (f"{req.stop_id}:{req.hour}:{req.is_weekend}:"
               f"{req.prior_stop_delay:.1f}:{req.stop_sequence_norm:.2f}")
@@ -334,15 +372,45 @@ _ws_clients: list[WebSocket] = []
 
 
 async def _broadcast_delay_events():
-    """Background task: push a simulated delay event every 5s."""
+    """Background task: push live or simulated delay events to connected clients."""
     routes    = ["Route 5", "Route 12", "Route 27", "Route 33", "M1 Metro", "Route 41"]
     stop_list = list(state.stops.values()) if state.stops else [{"name": "MG Road"}]
+    last_seen_timestamp = datetime.now()
 
     while True:
         await asyncio.sleep(5)
         if not _ws_clients:
             continue
 
+        if GPS_AVAILABLE and live_store:
+            events = live_store.recent_events(10)
+            new_events = [e for e in events if e.timestamp > last_seen_timestamp]
+            if new_events:
+                new_events.sort(key=lambda e: e.timestamp)
+                for obs in new_events:
+                    severity = "high" if obs.delay_min > 4 else "medium" if obs.delay_min > 1 else "low"
+                    event = {
+                        "route":          obs.route_name,
+                        "stop":           obs.stop_name,
+                        "delay_minutes":  max(0.0, obs.delay_min),
+                        "severity":       severity,
+                        "time":           obs.timestamp.strftime("%H:%M"),
+                    }
+                    
+                    dead = []
+                    for ws in _ws_clients:
+                        try:
+                            await ws.send_json(event)
+                        except Exception:
+                            dead.append(ws)
+                    for ws in dead:
+                        if ws in _ws_clients:
+                            _ws_clients.remove(ws)
+                
+                last_seen_timestamp = new_events[-1].timestamp
+                continue
+
+        # Fallback to simulated random event
         stop     = random.choice(stop_list)
         route    = random.choice(routes)
         delay    = round(random.uniform(-1, 8), 1)
@@ -363,7 +431,8 @@ async def _broadcast_delay_events():
             except Exception:
                 dead.append(ws)
         for ws in dead:
-            _ws_clients.remove(ws)
+            if ws in _ws_clients:
+                _ws_clients.remove(ws)
 
 
 # Broadcaster task is started inside the lifespan context manager
@@ -385,3 +454,48 @@ async def ws_live_feed(websocket: WebSocket):
     except WebSocketDisconnect:
         _ws_clients.remove(websocket)
         log.info(f"WebSocket disconnected — {len(_ws_clients)} remaining")
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# UPGRADE 1 — Live GPS integration endpoints
+# ════════════════════════════════════════════════════════════════════════════════
+
+@app.get("/live-delays", tags=["live"])
+async def get_live_delays():
+    """
+    Current live delay in minutes for every stop that has been observed.
+    Returns empty dict if GPS tracker hasn't fired yet.
+    """
+    if not GPS_AVAILABLE or live_store is None:
+        return {"delays": {}, "source": "unavailable", "count": 0}
+
+    delays = live_store.all_delays()
+    return {
+        "delays":  delays,
+        "source":  "real_gps" if USE_REAL_GPS else "simulation",
+        "count":   len(delays),
+        "updated": datetime.now().isoformat(),
+    }
+
+
+@app.get("/live-delays/{stop_id}", tags=["live"])
+async def get_stop_live_delay(stop_id: str):
+    """
+    Live delay for a specific stop.
+    Returns null if no observation yet.
+    """
+    stop = state.stops.get(stop_id)
+    if not stop:
+        raise HTTPException(404, f"Stop '{stop_id}' not found")
+
+    delay = live_store.get_delay(stop_id) if (GPS_AVAILABLE and live_store) else None
+    trend = live_store.get_trend(stop_id) if (GPS_AVAILABLE and live_store) else None
+
+    return {
+        "stop_id":        stop_id,
+        "stop_name":      stop["name"],
+        "live_delay_min": delay,
+        "trend_delay_min": trend,
+        "has_live_data":  delay is not None,
+        "source":         "real_gps" if USE_REAL_GPS else "simulation",
+    }

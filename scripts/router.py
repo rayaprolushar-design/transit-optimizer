@@ -46,7 +46,7 @@ def _reconstruct(parent, stops, graph, start_id, end_id):
     return path_nodes, edges
 
 
-def _astar(graph, stops, start_id, end_id):
+def _astar(graph, stops, start_id, end_id, live_delays=None):
     g = {s: float("inf") for s in stops}
     g[start_id] = 0.0
     parent = {s: None for s in stops}
@@ -65,7 +65,14 @@ def _astar(graph, stops, start_id, end_id):
         for nb, edge in graph.get(node, {}).items():
             if nb in visited:
                 continue
-            ng = gc + edge["minutes"]
+            
+            edge_minutes = edge["minutes"]
+            if live_delays and edge.get("route") != "WALK":
+                delay = live_delays.get(node)
+                if delay is not None:
+                    edge_minutes = max(0.1, edge_minutes + delay)
+
+            ng = gc + edge_minutes
             if ng < g.get(nb, float("inf")):
                 g[nb] = ng
                 parent[nb] = (node, edge)
@@ -74,7 +81,7 @@ def _astar(graph, stops, start_id, end_id):
     return g, parent, nv, (time.perf_counter() - t0) * 1000
 
 
-def _dijkstra(graph, stops, start_id, end_id):
+def _dijkstra(graph, stops, start_id, end_id, live_delays=None):
     dist = {s: float("inf") for s in stops}
     dist[start_id] = 0.0
     parent = {s: None for s in stops}
@@ -93,7 +100,14 @@ def _dijkstra(graph, stops, start_id, end_id):
         for nb, edge in graph.get(node, {}).items():
             if nb in visited:
                 continue
-            nc = cost + edge["minutes"]
+            
+            edge_minutes = edge["minutes"]
+            if live_delays and edge.get("route") != "WALK":
+                delay = live_delays.get(node)
+                if delay is not None:
+                    edge_minutes = max(0.1, edge_minutes + delay)
+
+            nc = cost + edge_minutes
             if nc < dist.get(nb, float("inf")):
                 dist[nb] = nc
                 parent[nb] = (node, edge)
@@ -104,15 +118,16 @@ def _dijkstra(graph, stops, start_id, end_id):
 
 def find_route(graph: dict, stops: dict,
                start_id: str, end_id: str,
-               algorithm: str = "astar") -> dict:
+               algorithm: str = "astar",
+               live_delays: dict = None) -> dict:
     """
     Find shortest path between two stop IDs.
     Returns a result dict compatible with build_directions().
     """
     if algorithm.lower() == "dijkstra":
-        costs, parent, nv, ms = _dijkstra(graph, stops, start_id, end_id)
+        costs, parent, nv, ms = _dijkstra(graph, stops, start_id, end_id, live_delays)
     else:
-        costs, parent, nv, ms = _astar(graph, stops, start_id, end_id)
+        costs, parent, nv, ms = _astar(graph, stops, start_id, end_id, live_delays)
 
     total = costs.get(end_id, float("inf"))
 
