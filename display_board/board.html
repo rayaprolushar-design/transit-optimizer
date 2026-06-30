@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<!--
+  display_board/board.html
+  Self-contained web display board for a single bus stop.
+  Opens in any browser — no build step, no Node.js.
+
+  Deploy options:
+    1. Open directly on Raspberry Pi browser (Chromium kiosk mode)
+    2. Host on GitHub Pages (free) → any screen can show it
+    3. Embed in BMTC website as an iframe
+
+  Usage:
+    Open board.html?stop=S001&api=https://your-railway-url.railway.app
+    Or locally: board.html?stop=S001&api=http://localhost:8000
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Transit Display Board</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #030712;
+      color: #f9fafb;
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header {
+      background: #0f172a;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .stop-name {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #f9fafb;
+    }
+
+    .stop-sub {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 3px;
+    }
+
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .live-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .live-dot.offline { background: #6b7280; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 #22c55e66; }
+      50%       { opacity: 0.6; box-shadow: 0 0 0 6px #22c55e00; }
+    }
+
+    /* ── Arrivals table ──────────────────────────────────────── */
+    .arrivals {
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .arrivals-header {
+      display: grid;
+      grid-template-columns: 80px 1fr 90px 90px 130px 80px;
+      gap: 0;
+      background: #1e293b;
+      padding: 10px 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    .arrival-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 90px 90px 130px 80px;
+      gap: 0;
+      padding: 16px 20px;
+      border-top: 1px solid #1f2937;
+      transition: background 0.2s;
+      align-items: center;
+    }
+
+    .arrival-row:hover { background: #111827; }
+
+    .route-badge {
+      background: #1e3a5f;
+      color: #60a5fa;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      display: inline-block;
+    }
+
+    .destination {
+      font-size: 15px;
+      font-weight: 500;
+      color: #e2e8f0;
+    }
+
+    .time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 600;
+      color: #9ca3af;
+    }
+
+    .eta-time { color: #f9fafb; }
+    .eta-delayed  { color: #f87171; }
+    .eta-warning  { color: #fbbf24; }
+    .eta-ontime   { color: #4ade80; }
+
+    .status-pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      display: inline-block;
+      white-space: nowrap;
+    }
+
+    .status-ontime  { background: #052e16; color: #4ade80; border: 1px solid #166534; }
+    .status-delayed { background: #450a0a; color: #f87171; border: 1px solid #991b1b; }
+    .status-warning { background: #422006; color: #fbbf24; border: 1px solid #92400e; }
+
+    .conf-dot { font-size: 16px; }
+
+    .empty-state {
+      padding: 48px;
+      text-align: center;
+      color: #374151;
+      font-size: 15px;
+    }
+
+    /* ── Footer stats ────────────────────────────────────────── */
+    .footer-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .stat-card {
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+
+    .stat-val {
+      font-size: 22px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #f9fafb;
+    }
+
+    .stat-lbl {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 3px;
+    }
+
+    /* ── Clock ───────────────────────────────────────────────── */
+    .clock {
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 48px;
+      font-weight: 600;
+      color: #f9fafb;
+      letter-spacing: 0.06em;
+      padding: 10px;
+    }
+
+    .clock-date {
+      font-size: 14px;
+      color: #6b7280;
+      font-family: 'Inter', sans-serif;
+      margin-top: -6px;
+      text-align: center;
+    }
+
+    .error-banner {
+      background: #450a0a;
+      border: 1px solid #991b1b;
+      border-radius: 10px;
+      padding: 16px 20px;
+      color: #f87171;
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+
+    .updated-at {
+      font-size: 12px;
+      color: #374151;
+      text-align: right;
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Clock -->
+<div class="clock" id="clock">--:--:--</div>
+<div class="clock-date" id="clock-date">Loading...</div>
+
+<!-- Error -->
+<div class="error-banner" id="error-banner" style="display:none">
+  ⚠ Cannot reach API — retrying in <span id="retry-countdown">30</span>s
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <div class="stop-name" id="stop-name">Loading...</div>
+    <div class="stop-sub" id="stop-sub">Transit Optimizer · Bengaluru</div>
+  </div>
+  <div class="live-badge">
+    <div class="live-dot offline" id="live-dot"></div>
+    <span id="live-label">Connecting...</span>
+  </div>
+</div>
+
+<!-- Arrivals -->
+<div class="arrivals">
+  <div class="arrivals-header">
+    <span>ROUTE</span>
+    <span>DESTINATION</span>
+    <span>SCHEDULED</span>
+    <span>PREDICTED</span>
+    <span>STATUS</span>
+    <span>CONF</span>
+  </div>
+  <div id="arrivals-body">
+    <div class="empty-state">Fetching arrivals...</div>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="footer-grid">
+  <div class="stat-card">
+    <div class="stat-val" id="stat-delay">—</div>
+    <div class="stat-lbl">Live GPS delay</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" id="stat-count">—</div>
+    <div class="stat-lbl">Next arrivals</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">0.76m</div>
+    <div class="stat-lbl">Model MAE</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" id="stat-updated">—</div>
+    <div class="stat-lbl">Last updated</div>
+  </div>
+</div>
+
+<div class="updated-at" id="updated-at">Powered by Transit Optimizer API</div>
+
+<script>
+// ── Config from URL params ────────────────────────────────────────────────────
+const params  = new URLSearchParams(location.search)
+const STOP_ID = params.get('stop') || 'S001'
+const API_URL = params.get('api')  || 'http://localhost:8000'
+const REFRESH = parseInt(params.get('refresh') || '30') * 1000
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now  = new Date()
+  document.getElementById('clock').textContent =
+    now.toTimeString().slice(0, 8)
+  document.getElementById('clock-date').textContent =
+    now.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+}
+setInterval(updateClock, 1000)
+updateClock()
+
+// ── Fetch and render ──────────────────────────────────────────────────────────
+let retryTimer = null
+
+async function fetchBoard() {
+  try {
+    const res  = await fetch(`${API_URL}/board/${STOP_ID}?n=6`)
+    const data = await res.json()
+
+    document.getElementById('error-banner').style.display = 'none'
+    renderBoard(data)
+
+    // Live indicator
+    const dot   = document.getElementById('live-dot')
+    const label = document.getElementById('live-label')
+    dot.classList.remove('offline')
+    label.textContent = data.has_gps ? 'LIVE GPS' : 'SIMULATED'
+    if (!data.has_gps) dot.classList.add('offline')
+
+  } catch (err) {
+    document.getElementById('error-banner').style.display = 'block'
+    document.getElementById('live-dot').classList.add('offline')
+    document.getElementById('live-label').textContent = 'OFFLINE'
+
+    // Countdown
+    let secs = REFRESH / 1000
+    const cd = document.getElementById('retry-countdown')
+    clearInterval(retryTimer)
+    retryTimer = setInterval(() => {
+      secs--
+      if (cd) cd.textContent = secs
+    }, 1000)
+  }
+}
+
+function renderBoard(data) {
+  document.getElementById('stop-name').textContent = data.stop_name || STOP_ID
+  document.getElementById('stat-delay').textContent =
+    data.live_delay != null ? `${data.live_delay > 0 ? '+' : ''}${data.live_delay.toFixed(1)}m` : '—'
+  document.getElementById('stat-count').textContent = data.arrivals?.length || 0
+  document.getElementById('stat-updated').textContent =
+    new Date(data.timestamp).toTimeString().slice(0,8)
+  document.getElementById('updated-at').textContent =
+    `Last updated: ${new Date(data.timestamp).toLocaleTimeString('en-IN')}`
+
+  const body = document.getElementById('arrivals-body')
+
+  if (!data.arrivals || data.arrivals.length === 0) {
+    body.innerHTML = '<div class="empty-state">No upcoming arrivals</div>'
+    return
+  }
+
+  body.innerHTML = data.arrivals.map(arr => {
+    const delay   = arr.delay_minutes || 0
+    const etaClass = delay > 3 ? 'eta-delayed' : delay > 1 ? 'eta-warning' : 'eta-ontime'
+    const pillClass = delay > 3 ? 'status-delayed' : delay > 1 ? 'status-warning' : 'status-ontime'
+    const confDot  = { high: '🟢', medium: '🟡', low: '🔴' }[arr.confidence] || '⚪'
+
+    return `
+      <div class="arrival-row">
+        <div><span class="route-badge">${arr.route}</span></div>
+        <div class="destination">${arr.destination}</div>
+        <div class="time">${arr.scheduled_time}</div>
+        <div class="time ${etaClass}">${arr.predicted_time}</div>
+        <div><span class="status-pill ${pillClass}">${arr.status}</span></div>
+        <div class="conf-dot">${confDot}</div>
+      </div>`
+  }).join('')
+}
+
+// ── WebSocket for instant updates ─────────────────────────────────────────────
+function connectWS() {
+  const wsUrl = API_URL.replace(/^http/, 'ws') + `/ws/board/${STOP_ID}`
+  try {
+    const ws = new WebSocket(wsUrl)
+    ws.onmessage = (e) => {
+      const update = JSON.parse(e.data)
+      if (update.type === 'delay_update') {
+        document.getElementById('stat-delay').textContent =
+          `${update.delay_min > 0 ? '+' : ''}${update.delay_min.toFixed(1)}m`
+        // Re-fetch full board on delay change
+        fetchBoard()
+      }
+    }
+    ws.onclose = () => setTimeout(connectWS, 5000)  // auto-reconnect
+    ws.onerror = () => ws.close()
+  } catch (_) {}
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+fetchBoard()
+setInterval(fetchBoard, REFRESH)
+connectWS()
+</script>
+</body>
+</html>
