@@ -672,3 +672,126 @@ async def ws_board(websocket: WebSocket, stop_id: str):
                     last_delay = current_delay
     except WebSocketDisconnect:
         _board_clients[stop_id].remove(websocket)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# UPGRADE 3 — Delivery Routing Endpoints
+# Same A* algorithm, different graph (road network vs transit stops).
+# ════════════════════════════════════════════════════════════════════════════════
+
+try:
+    from delivery.road_graph import (
+        build_delivery_graph, astar_delivery,
+        nearest_neighbour_tsp, DELIVERY_LOCATIONS,
+    )
+    DELIVERY_AVAILABLE = True
+except ImportError:
+    DELIVERY_AVAILABLE = False
+
+
+class DeliveryRouteRequest(BaseModel):
+    from_id:  str  = Field(..., description="Origin location ID e.g. R001")
+    to_id:    str  = Field(..., description="Destination location ID e.g. C001")
+    hour:     int  = Field(12, ge=0, le=23, description="Hour for congestion model")
+
+
+class MultiStopRequest(BaseModel):
+    start_id: str        = Field(..., description="Starting location")
+    stop_ids: list[str]  = Field(..., description="Drop-off locations in any order")
+    hour:     int        = Field(12, ge=0, le=23)
+
+
+@app.get("/delivery/locations", tags=["delivery"])
+async def list_delivery_locations(type: Optional[str] = Query(None)):
+    """List all delivery locations (restaurants, customers, warehouses, intersections)."""
+    if not DELIVERY_AVAILABLE:
+        raise HTTPException(503, "Delivery module not installed")
+    locs = DELIVERY_LOCATIONS
+    if type:
+        locs = {k: v for k, v in locs.items() if v.get("type") == type}
+    return [{"location_id": k, **v} for k, v in locs.items()]
+
+
+@app.get("/delivery/route", tags=["delivery"])
+async def get_delivery_route(
+    from_id: str = Query(..., description="Origin location ID e.g. R001"),
+    to_id:   str = Query(..., description="Destination location ID e.g. C001"),
+    hour:    int = Query(12, ge=0, le=23, description="Hour for congestion model"),
+):
+    """
+    Find fastest delivery route between two locations using A* and road graph.
+    Adjusts weights dynamically based on time-of-day traffic congestion.
+    """
+    if not DELIVERY_AVAILABLE:
+        raise HTTPException(503, "Delivery module not installed")
+    if from_id not in DELIVERY_LOCATIONS:
+        raise HTTPException(404, f"Location '{from_id}' not found")
+    if to_id not in DELIVERY_LOCATIONS:
+        raise HTTPException(404, f"Location '{to_id}' not found")
+
+    graph  = build_delivery_graph(hour)
+    result = astar_delivery(graph, from_id, to_id)
+    if not result.get("found"):
+        raise HTTPException(404, f"No route found from '{from_id}' to '{to_id}'")
+
+    path_details = []
+    for node in result["path"]:
+        loc = DELIVERY_LOCATIONS.get(node, {})
+        path_details.append({
+            "node_id": node,
+            "name":    loc.get("name", node),
+            "type":    loc.get("type", "unknown"),
+            "lat":     loc.get("lat"),
+            "lon":     loc.get("lon"),
+        })
+
+    return {
+        "from_id":       from_id,
+        "from_name":     DELIVERY_LOCATIONS[from_id]["name"],
+        "to_id":         to_id,
+        "to_name":       DELIVERY_LOCATIONS[to_id]["name"],
+        "hour":          hour,
+        "total_minutes": result["total_minutes"],
+        "total_km":      result["total_km"],
+        "nodes_visited": result["nodes_visited"],
+        "elapsed_ms":    round(result["elapsed_ms"], 4),
+        "path":          path_details,
+    }
+
+
+@app.post("/delivery/multi-stop", tags=["delivery"])
+async def delivery_multi_stop(req: MultiStopRequest):
+    """
+    Solve TSP route optimization for multi-stop delivery batching.
+    Finds the optimal sequence of drops starting from start_id.
+    """
+    if not DELIVERY_AVAILABLE:
+        raise HTTPException(503, "Delivery module not installed")
+    if req.start_id not in DELIVERY_LOCATIONS:
+        raise HTTPException(404, f"Start location '{req.start_id}' not found")
+    for sid in req.stop_ids:
+        if sid not in DELIVERY_LOCATIONS:
+            raise HTTPException(404, f"Drop-off location '{sid}' not found")
+
+    graph  = build_delivery_graph(req.hour)
+    result = nearest_neighbour_tsp(graph, req.start_id, req.stop_ids)
+
+    route_details = []
+    for node in result["route"]:
+        loc = DELIVERY_LOCATIONS.get(node, {})
+        route_details.append({
+            "node_id": node,
+            "name":    loc.get("name", node),
+            "type":    loc.get("type", "unknown"),
+        })
+
+    return {
+        "start_id":        req.start_id,
+        "start_name":      DELIVERY_LOCATIONS[req.start_id]["name"],
+        "hour":            req.hour,
+        "optimized_route": route_details,
+        "total_minutes":   result["total_minutes"],
+        "total_km":        result["total_km"],
+        "stops_count":     result["stops_count"],
+    }
+
