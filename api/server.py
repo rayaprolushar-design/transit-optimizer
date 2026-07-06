@@ -795,3 +795,76 @@ async def delivery_multi_stop(req: MultiStopRequest):
         "stops_count":     result["stops_count"],
     }
 
+
+# ════════════════════════════════════════════════════════════════════════════════
+# UPGRADE 4 — Multi-Modal Routing Endpoints
+# Unified A* over Driving, Metro, Bus, and Walk.
+# ════════════════════════════════════════════════════════════════════════════════
+
+try:
+    from multimodal.planner import (
+        build_multimodal_graph, astar_multimodal,
+        build_directions, LOCATIONS as MULTIMODAL_LOCATIONS
+    )
+    MULTIMODAL_AVAILABLE = True
+except ImportError:
+    MULTIMODAL_AVAILABLE = False
+
+
+class MultimodalRouteRequest(BaseModel):
+    from_id:       str       = Field(..., description="Origin location ID e.g. HOME_WHITEFIELD")
+    to_id:         str       = Field(..., description="Destination location ID e.g. OFFICE_ECITY")
+    hour:          int       = Field(8, ge=0, le=23, description="Hour of the day")
+    allowed_modes: list[str] = Field(default=["drive", "metro", "bus", "walk"])
+
+
+@app.get("/multimodal/locations", tags=["multimodal"])
+async def list_multimodal_locations(type: Optional[str] = Query(None)):
+    """List all locations in the multi-modal transport network."""
+    if not MULTIMODAL_AVAILABLE:
+        raise HTTPException(503, "Multi-modal module not installed")
+    locs = MULTIMODAL_LOCATIONS
+    if type:
+        locs = {k: v for k, v in locs.items() if v.get("type") == type}
+    return [{"location_id": k, **v} for k, v in locs.items()]
+
+
+@app.post("/multimodal/route", tags=["multimodal"])
+async def get_multimodal_route(req: MultimodalRouteRequest):
+    """
+    Find fastest multi-modal route combining Driving, Metro, Bus, and Walking.
+    Uses a unified multi-modal graph and incorporates wait-time penalties at transfer nodes.
+    """
+    if not MULTIMODAL_AVAILABLE:
+        raise HTTPException(503, "Multi-modal module not installed")
+    if req.from_id not in MULTIMODAL_LOCATIONS:
+        raise HTTPException(404, f"Location '{req.from_id}' not found")
+    if req.to_id not in MULTIMODAL_LOCATIONS:
+        raise HTTPException(404, f"Location '{req.to_id}' not found")
+
+    is_rush = (7 <= req.hour <= 10) or (17 <= req.hour <= 20)
+    congestion_factor = 2.2 if is_rush else 1.0
+
+    graph = build_multimodal_graph(congestion_factor)
+    allowed_modes_set = set(req.allowed_modes)
+
+    result = astar_multimodal(graph, req.from_id, req.to_id, allowed_modes_set)
+    if not result.get("found"):
+        raise HTTPException(404, f"No multi-modal route found from '{req.from_id}' to '{req.to_id}'")
+
+    directions = build_directions(result)
+
+    return {
+        "from_id":       req.from_id,
+        "from_name":     MULTIMODAL_LOCATIONS[req.from_id]["name"],
+        "to_id":         req.to_id,
+        "to_name":       MULTIMODAL_LOCATIONS[req.to_id]["name"],
+        "hour":          req.hour,
+        "total_minutes": result["total_minutes"],
+        "nodes_visited": result["nodes_visited"],
+        "elapsed_ms":    round(result["elapsed_ms"], 4),
+        "transfers":     sum(1 for d in directions if d["penalty"] > 0),
+        "directions":    directions,
+    }
+
+
