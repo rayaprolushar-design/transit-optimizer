@@ -23,6 +23,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY api/        ./api/
 COPY scripts/    ./scripts/
 COPY data/       ./data/
+COPY delivery/   ./delivery/
+COPY multimodal/ ./multimodal/
 COPY main.py     .
 
 # Create logs dir (mounted as volume in production)
