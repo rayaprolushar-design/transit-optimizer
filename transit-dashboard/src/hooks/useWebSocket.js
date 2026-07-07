@@ -15,9 +15,13 @@ export const useWebSocket = (urlPath = '/ws') => {
         wsUrl = `${base}${urlPath}`;
       }
     } else {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      wsUrl = `${protocol}//${host}${urlPath}`;
+      if (import.meta.env.DEV) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        wsUrl = `${protocol}//${host}${urlPath}`;
+      } else {
+        wsUrl = `wss://transit-optimizer-production.up.railway.app${urlPath}`;
+      }
     }
 
     setStatus('connecting');
