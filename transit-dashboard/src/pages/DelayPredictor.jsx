@@ -52,7 +52,7 @@ function useDebounce(value, delay) {
 }
 
 export default function DelayPredictor() {
-  const { stops } = useStops()
+  const { stops, loading: stopsLoading, error: stopsError } = useStops()
 
   // ── Input state ───────────────────────────────────────────────────────────
   const [stopName,   setStopName]   = useState('')
@@ -233,8 +233,9 @@ export default function DelayPredictor() {
             </label>
           </div>
 
-          {/* Error */}
-          {error && <ErrorBanner message={error} />}
+          {/* Loading / Error */}
+          {stopsLoading && <LoadingSpinner text="Loading stops…" />}
+          {(error || stopsError) && <ErrorBanner message={error ?? stopsError} />}
 
           {/* Comparison card */}
           {compares && (

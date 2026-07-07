@@ -31,7 +31,7 @@ const ALGO_OPTIONS = [
 ]
 
 export default function RoutePlanner() {
-  const { stops, loading: stopsLoading } = useStops()
+  const { stops, loading: stopsLoading, error: stopsError } = useStops()
   const { result, loading, error, search } = useRoute()
 
   const [from,      setFrom]      = useState('')
@@ -140,9 +140,9 @@ export default function RoutePlanner() {
           {(stopsLoading || loading) && (
             <LoadingSpinner text={stopsLoading ? 'Loading stops…' : 'Running algorithm…'} />
           )}
-          {(error || apiError) && (
+          {(error || apiError || stopsError) && (
             <ErrorBanner
-              message={error ?? apiError}
+              message={error ?? apiError ?? stopsError}
               onDismiss={() => setApiError(null)}
             />
           )}
