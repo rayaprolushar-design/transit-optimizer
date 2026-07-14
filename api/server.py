@@ -817,7 +817,7 @@ async def delivery_multi_stop(req: MultiStopRequest):
 try:
     from multimodal.planner import (
         build_multimodal_graph, astar_multimodal,
-        build_directions, LOCATIONS as MULTIMODAL_LOCATIONS
+        build_directions as build_multimodal_directions, LOCATIONS as MULTIMODAL_LOCATIONS
     )
     MULTIMODAL_AVAILABLE = True
 except ImportError:
@@ -865,7 +865,7 @@ async def get_multimodal_route(req: MultimodalRouteRequest):
     if not result.get("found"):
         raise HTTPException(404, f"No multi-modal route found from '{req.from_id}' to '{req.to_id}'")
 
-    directions = build_directions(result)
+    directions = build_multimodal_directions(result)
 
     return {
         "from_id":       req.from_id,
