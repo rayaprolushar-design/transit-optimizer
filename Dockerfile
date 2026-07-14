@@ -25,6 +25,7 @@ COPY scripts/    ./scripts/
 COPY data/       ./data/
 COPY delivery/   ./delivery/
 COPY multimodal/ ./multimodal/
+COPY infra/      ./infra/
 COPY main.py     .
 
 # Create logs dir (mounted as volume in production)

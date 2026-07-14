@@ -37,7 +37,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.router import find_route, build_directions
 from scripts.search import fuzzy_find_stop
-from scripts.week9_performance import LRUCache
+from infra.cache import route_cache, pred_cache, board_cache
+from infra.database import db
+from infra.metrics import metrics
 
 try:
     from scripts.gps_tracker import live_store, run_live_feed
@@ -69,8 +71,8 @@ class AppState:
     stops:       dict   = {}
     model:       object = None
     model_meta:  dict   = {}
-    route_cache: LRUCache = LRUCache(capacity=512)
-    pred_cache:  LRUCache = LRUCache(capacity=256)
+    route_cache: RedisCache = route_cache
+    pred_cache:  RedisCache = pred_cache
     start_time:  float  = 0.0
     requests:    int    = 0
 
@@ -190,8 +192,10 @@ async def count_requests(request: Request, call_next):
     state.requests += 1
     t0 = time.perf_counter()
     response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    metrics.record(request.url.path, request.method, response.status_code, elapsed_ms)
     log.info(f"{request.method} {request.url.path} "
-             f"→ {response.status_code} [{(time.perf_counter()-t0)*1000:.1f}ms]")
+             f"→ {response.status_code} [{elapsed_ms:.1f}ms]")
     return response
 
 
@@ -253,6 +257,10 @@ async def get_route(
         return {**cached, "cached": True}
 
     result = find_route(state.graph, state.stops, sid, eid, algorithm, live_delays=live_delays)
+    db.log_algorithm_run(
+        algorithm, sid, eid, result["found"], result.get("total_minutes", 0),
+        result["nodes_visited"], result["elapsed_ms"]
+    )
     if not result["found"]:
         raise HTTPException(404, f"No route found from '{sname}' to '{ename}'")
 
@@ -346,6 +354,11 @@ async def stats():
             "route_cache":      state.route_cache.stats(),
             "prediction_cache": state.pred_cache.stats(),
         },
+        "db": {
+            "backend": db.backend,
+            "pool": db.pool_status(),
+        },
+        "metrics": metrics.summary(),
         "server": {
             "uptime_s":        round(time.perf_counter() - state.start_time, 1),
             "requests_served": state.requests,

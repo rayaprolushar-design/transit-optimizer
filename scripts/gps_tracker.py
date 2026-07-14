@@ -98,6 +98,14 @@ class LiveDelayStore:
                 self._history[obs.stop_id] = deque(maxlen=20)
             self._history[obs.stop_id].append(obs)
             self._events.appendleft(obs)
+            try:
+                from infra.database import db
+                db.log_delay(
+                    obs.route_name, obs.stop_id, obs.delay_min,
+                    obs.hour, bool(obs.is_rush), bool(obs.is_weekend)
+                )
+            except Exception:
+                pass
 
     def get_delay(self, stop_id: str) -> Optional[float]:
         """Get current delay at a stop in minutes (None if no live data)."""
