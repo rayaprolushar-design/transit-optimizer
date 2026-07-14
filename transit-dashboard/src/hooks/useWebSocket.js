@@ -20,7 +20,7 @@ export const useWebSocket = (urlPath = '/ws') => {
         const host = window.location.host;
         wsUrl = `${protocol}//${host}${urlPath}`;
       } else {
-        wsUrl = `wss://transit-optimizer-production.up.railway.app${urlPath}`;
+        wsUrl = `wss://transit-optimizer-production-cea3.up.railway.app${urlPath}`;
       }
     }
 
