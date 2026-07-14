@@ -46,4 +46,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 # --host 0.0.0.0  → listen on all interfaces (required in containers)
 # --port $PORT    → dynamic port assignment for Railway (defaults to 8000)
 # --workers 2     → 2 processes for concurrent requests
-CMD uvicorn api.server:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2
+CMD uvicorn api.server:app --host 0.0.0.0 --port 8000 --workers 2
