@@ -881,3 +881,132 @@ async def get_multimodal_route(req: MultimodalRouteRequest):
     }
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+# UPGRADE 5 — Driver Assignment Endpoints
+# ════════════════════════════════════════════════════════════════════════════════
+
+try:
+    from matching.assignment import (
+        get_server, VehicleType as VT,
+        AssignmentServer,
+    )
+    MATCHING_AVAILABLE = True
+    _assignment_server: Optional[AssignmentServer] = None
+except ImportError:
+    MATCHING_AVAILABLE = False
+
+
+def _get_assignment_server():
+    global _assignment_server
+    if _assignment_server is None and MATCHING_AVAILABLE:
+        _assignment_server = get_server()
+    return _assignment_server
+
+
+class RideRequestBody(BaseModel):
+    rider_id:     str   = Field(..., example="RIDER_001")
+    pickup_lat:   float = Field(..., example=12.9755)
+    pickup_lon:   float = Field(..., example=77.6069)
+    dropoff_lat:  float = Field(..., example=12.9116)
+    dropoff_lon:  float = Field(..., example=77.6389)
+    vehicle_type: str   = Field("bike", description="bike|auto|mini|sedan")
+    use_hungarian: bool = Field(True,  description="Use optimal matching")
+
+
+@app.get("/drivers", tags=["assignment"])
+async def list_drivers(status: Optional[str] = Query(None)):
+    """List all drivers and their current status."""
+    if not MATCHING_AVAILABLE:
+        raise HTTPException(503, "Matching module not available")
+    srv = _get_assignment_server()
+    drivers = srv.pool.available() if status == "available" else list(srv.pool._drivers.values())
+    return [
+        {
+            "driver_id":    d.driver_id,
+            "name":         d.name,
+            "lat":          d.lat,
+            "lon":          d.lon,
+            "vehicle_type": d.vehicle_type.value,
+            "rating":       d.rating,
+            "status":       d.status.value,
+            "trips_today":  d.trips_today,
+            "earnings":     d.earnings,
+        }
+        for d in drivers
+    ]
+
+
+@app.post("/request-ride", tags=["assignment"])
+async def request_ride(body: RideRequestBody):
+    """
+    Request a ride — matches nearest available driver using
+    Hungarian bipartite matching or greedy nearest-neighbour.
+
+    Returns driver details, ETA, fare estimate with surge multiplier.
+
+    Example — MG Road to HSR Layout:
+      pickup_lat=12.9755, pickup_lon=77.6069
+      dropoff_lat=12.9116, dropoff_lon=77.6389
+    """
+    if not MATCHING_AVAILABLE:
+        raise HTTPException(503, "Matching module not available")
+
+    try:
+        vt = VT(body.vehicle_type.lower())
+    except ValueError:
+        raise HTTPException(400, f"Invalid vehicle_type: {body.vehicle_type}")
+
+    srv    = _get_assignment_server()
+    result = srv.request_ride(
+        rider_id     = body.rider_id,
+        pickup_lat   = body.pickup_lat,
+        pickup_lon   = body.pickup_lon,
+        dropoff_lat  = body.dropoff_lat,
+        dropoff_lon  = body.dropoff_lon,
+        vehicle_type = vt,
+        use_hungarian = body.use_hungarian,
+    )
+
+    if not result:
+        raise HTTPException(
+            404,
+            f"No {body.vehicle_type} drivers available in your area. "
+            "Try a different vehicle type or retry in a few minutes."
+        )
+
+    return {
+        "matched":        True,
+        "rider_id":       result.rider_id,
+        "driver_id":      result.driver_id,
+        "driver_name":    result.driver_name,
+        "vehicle_type":   result.vehicle_type,
+        "eta_minutes":    result.eta_minutes,
+        "pickup_km":      result.pickup_km,
+        "fare_estimate":  result.fare,
+        "surge_mult":     result.surge,
+        "algorithm":      result.algorithm,
+        "match_time_ms":  result.match_ms,
+    }
+
+
+@app.get("/surge", tags=["assignment"])
+async def surge_pricing():
+    """Current surge multipliers by zone across Bengaluru."""
+    if not MATCHING_AVAILABLE:
+        raise HTTPException(503, "Matching module not available")
+    srv = _get_assignment_server()
+    return {
+        "zones": srv.surge_eng.zone_stats(),
+        "note":  "Surge = demand/supply ratio per zone. Cap: 3.0×",
+    }
+
+
+@app.get("/driver-stats", tags=["assignment"])
+async def driver_stats():
+    """Pool statistics — available drivers by type and zone."""
+    if not MATCHING_AVAILABLE:
+        raise HTTPException(503, "Matching module not available")
+    return _get_assignment_server().pool.stats()
+
+
+
