@@ -1009,4 +1009,163 @@ async def driver_stats():
     return _get_assignment_server().pool.stats()
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+# UPGRADE 6 — Demand Forecasting Endpoints
+# ════════════════════════════════════════════════════════════════════════════════
+
+try:
+    from forecasting.demand import (
+        DemandSimulator, ProphetForecaster, ARIMAForecaster,
+        DynamicPricingEngine, DarkStoreAnalyzer, InventoryOptimizer,
+        ZONES, PROPHET_OK,
+    )
+    FORECASTING_AVAILABLE = True
+except ImportError:
+    FORECASTING_AVAILABLE = False
+
+# Lazy-initialised — built on first request (takes ~30s for Prophet)
+_forecast_cache: dict = {}
+_forecast_engine: dict = {}
+
+
+def _get_forecast_data():
+    """Build and cache forecast data on first call."""
+    if "ready" not in _forecast_cache:
+        import warnings; warnings.filterwarnings("ignore")
+        sim       = DemandSimulator(days=90)
+        zone_data = sim.generate_all()
+        if PROPHET_OK:
+            fc = ProphetForecaster()
+        else:
+            fc = ARIMAForecaster()
+        for zid, df in zone_data.items():
+            fc.train(zid, df)
+        _forecast_cache["zone_data"]  = zone_data
+        _forecast_cache["forecaster"] = fc
+        _forecast_cache["ready"]      = True
+    return _forecast_cache
+
+
+@app.get("/forecast/zones", tags=["forecasting"])
+async def forecast_zones():
+    """
+    Demand forecast + dynamic pricing for all zones — next 30 minutes.
+    Returns predicted order volume, delivery fee, and inventory recommendation.
+    Takes ~30s on first call (model training). Subsequent calls are instant.
+    """
+    if not FORECASTING_AVAILABLE:
+        raise HTTPException(503, "Forecasting module not available. pip install prophet")
+
+    data      = _get_forecast_data()
+    fc        = data["forecaster"]
+    zone_data = data["zone_data"]
+    pricer    = DynamicPricingEngine()
+    decisions = []
+
+    for zid in ZONES:
+        if PROPHET_OK and hasattr(fc, "predict") and fc.is_trained(zid):
+            result = fc.predict(zid, periods=1)
+            pred   = float(result["yhat"].iloc[-1]) if result is not None else 0.0
+        elif hasattr(fc, "predict"):
+            result = fc.predict(zid, periods=1)
+            pred   = float(result[0]) if result is not None else 0.0
+        else:
+            pred   = zone_data[zid]["y"].tail(48).mean()
+
+        d = pricer.decide(zid, pred)
+        decisions.append({
+            "zone_id":          d.zone_id,
+            "zone_name":        d.zone_name,
+            "predicted_demand": d.predicted_demand,
+            "capacity":         d.capacity,
+            "utilisation":      d.utilisation,
+            "delivery_fee":     d.final_fee,
+            "surge_mult":       d.multiplier,
+            "pre_stock_units":  d.pre_stock_units,
+            "recommendation":   d.recommendation,
+        })
+
+    return {
+        "forecast_horizon": "30 minutes",
+        "model":            "Prophet" if PROPHET_OK else "ARIMA",
+        "zones":            sorted(decisions, key=lambda x: -x["utilisation"]),
+        "timestamp":        datetime.now().isoformat(),
+    }
+
+
+@app.get("/forecast/{zone_id}", tags=["forecasting"])
+async def forecast_zone(zone_id: str, periods: int = Query(4, ge=1, le=48)):
+    """
+    Detailed demand forecast for one zone — next N × 30-minute slots.
+    Includes predicted demand, confidence interval, and pricing decision.
+    """
+    if not FORECASTING_AVAILABLE:
+        raise HTTPException(503, "Forecasting module not available")
+    if zone_id not in ZONES:
+        raise HTTPException(404, f"Zone '{zone_id}' not found. Use /forecast/zones to list zones.")
+
+    data   = _get_forecast_data()
+    fc     = data["forecaster"]
+    pricer = DynamicPricingEngine()
+
+    if PROPHET_OK and hasattr(fc, "predict") and fc.is_trained(zone_id):
+        result = fc.predict(zone_id, periods=periods)
+        if result is not None:
+            slots = []
+            for _, row in result.iterrows():
+                d = pricer.decide(zone_id, max(0, row["yhat"]))
+                slots.append({
+                    "time":           row["ds"].isoformat(),
+                    "predicted":      round(max(0, row["yhat"]), 1),
+                    "lower_95":       round(max(0, row.get("yhat_lower", 0)), 1),
+                    "upper_95":       round(max(0, row.get("yhat_upper", 0)), 1),
+                    "delivery_fee":   d.final_fee,
+                    "utilisation":    d.utilisation,
+                    "pre_stock":      d.pre_stock_units,
+                })
+            return {
+                "zone_id":   zone_id,
+                "zone_name": ZONES[zone_id]["name"],
+                "model":     "Prophet",
+                "periods":   periods,
+                "forecasts": slots,
+            }
+
+    raise HTTPException(503, "Model not yet trained for this zone")
+
+
+@app.get("/pricing/decisions", tags=["forecasting"])
+async def pricing_decisions():
+    """
+    Current dynamic pricing decisions across all zones.
+    Lightweight version of /forecast/zones — no model retraining.
+    Uses recent historical average as demand estimate when model not ready.
+    """
+    if not FORECASTING_AVAILABLE:
+        raise HTTPException(503, "Forecasting module not available")
+
+    pricer    = DynamicPricingEngine()
+    decisions = []
+
+    if "ready" in _forecast_cache:
+        zone_data = _forecast_cache["zone_data"]
+        for zid, df in zone_data.items():
+            # Use last hour average as quick estimate
+            pred = df["y"].tail(2).mean()
+            d    = pricer.decide(zid, pred)
+            decisions.append({"zone_id": d.zone_id, "zone_name": d.zone_name,
+                               "fee": d.final_fee, "surge": d.multiplier,
+                               "util": d.utilisation})
+    else:
+        # Return static baseline before first forecast
+        for zid, zone in ZONES.items():
+            decisions.append({
+                "zone_id": zid, "zone_name": zone["name"],
+                "fee": 25.0, "surge": 1.0, "util": 0.5,
+            })
+
+    return {"decisions": decisions, "timestamp": datetime.now().isoformat()}
+
+
+
 
