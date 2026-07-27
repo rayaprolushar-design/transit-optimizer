@@ -1167,5 +1167,123 @@ async def pricing_decisions():
     return {"decisions": decisions, "timestamp": datetime.now().isoformat()}
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+# UPGRADE 8 — Model Monitoring Endpoints
+# ════════════════════════════════════════════════════════════════════════════════
+
+try:
+    from monitoring.model_monitor import (
+        build_monitor_from_meta, QuantileDelayPredictor,
+        ConfidenceEstimator, ModelHealthDashboard,
+    )
+    MONITORING_AVAILABLE = True
+    _monitor: Optional[ModelHealthDashboard] = None
+    _qp: Optional[QuantileDelayPredictor]    = None
+except ImportError:
+    MONITORING_AVAILABLE = False
+
+
+def _get_monitor() -> Optional[ModelHealthDashboard]:
+    global _monitor
+    if _monitor is None and MONITORING_AVAILABLE:
+        _monitor = build_monitor_from_meta()
+    return _monitor
+
+
+@app.get("/model-health", tags=["monitoring"])
+async def model_health():
+    """
+    Full model health report:
+      - Health score 0-100
+      - Rolling MAE vs training MAE (drift ratio)
+      - Page-Hinkley drift status
+      - Total predictions served
+      - Recent alerts
+
+    If drift_status = 'warning' or 'critical', consider retraining.
+    """
+    if not MONITORING_AVAILABLE:
+        raise HTTPException(503, "Monitoring module not available")
+    m = _get_monitor()
+    if not m:
+        raise HTTPException(503, "Monitor not initialised")
+    return m.health_report()
+
+
+@app.post("/predict-delay-ci", tags=["monitoring"])
+async def predict_delay_with_ci(req: DelayRequest):
+    """
+    Predict delay with p10/p50/p90 confidence intervals.
+    Returns three predictions instead of one point estimate:
+      p10 = optimistic (10% of actual delays below this)
+      p50 = median     (50% above, 50% below)
+      p90 = pessimistic (90% of actual delays below this)
+
+    Use p90 when you need to catch a connection and can't afford to be late.
+    Use p50 for general planning.
+    """
+    if not MONITORING_AVAILABLE:
+        # Fallback to regular prediction
+        return await predict_delay(req)
+
+    stop = state.stops.get(req.stop_id)
+    if not stop:
+        raise HTTPException(404, f"Stop '{req.stop_id}' not found")
+
+    X    = _feature_vector(req)
+    pred = float(state.model.predict(X)[0])
+    pred = max(0.0, pred)
+    mae  = state.model_meta.get("test_mae", 0.763)
+
+    # Approximate CI from point prediction + MAE
+    # (proper version uses QuantileDelayPredictor trained on full dataset)
+    p10  = round(max(0.0, pred - mae * 1.28), 2)  # 80% CI lower
+    p50  = round(pred, 2)
+    p90  = round(pred + mae * 1.28, 2)             # 80% CI upper
+
+    ce   = ConfidenceEstimator()
+    est  = ce.estimate(p10, p50, p90, mae)
+
+    # Record for drift monitoring
+    m = _get_monitor()
+    if m:
+        # We don't have the actual delay yet — use p50 as placeholder
+        # In production: actual delay reported when bus arrives
+        pass
+
+    return {
+        "stop_id":       req.stop_id,
+        "stop_name":     stop["name"],
+        "p10":           p10,
+        "p50":           p50,
+        "p90":           p90,
+        "interval_width":round(p90 - p10, 2),
+        "confidence":    est.confidence,
+        "interpretation":est.interpretation,
+        "model_mae":     mae,
+        "cached":        False,
+    }
+
+
+@app.post("/report-actual-delay", tags=["monitoring"])
+async def report_actual_delay(
+    stop_id: str, predicted: float, actual: float
+):
+    """
+    Report the actual observed delay for a prediction.
+    Used to update drift monitoring.
+
+    In production: called automatically when GPS confirms bus arrival.
+    In demo: call manually after observing a delay.
+    """
+    m = _get_monitor()
+    if m:
+        m.record_prediction(actual, predicted)
+        return {"recorded": True,
+                "drift_status": m.drift_detector.status()["drift_status"]}
+    return {"recorded": False}
+
+
+
 
 
