@@ -93,10 +93,15 @@ class RoutePlannerUser(HttpUser):
     def get_route_dijkstra(self):
         """Occasional Dijkstra comparison."""
         frm, to = random.choice(STOP_PAIRS)
-        self.client.get(
+        with self.client.get(
             f"/route?from={frm}&to={to}&algorithm=dijkstra",
             name="/route [dijkstra]",
-        )
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 404):
+                resp.success()
+            else:
+                resp.failure(f"Unexpected status {resp.status_code}")
 
     @task(3)
     def predict_delay(self):
@@ -176,10 +181,15 @@ class MixedUser(HttpUser):
     @task(8)
     def route(self):
         frm, to = random.choice(STOP_PAIRS)
-        self.client.get(
+        with self.client.get(
             f"/route?from={frm}&to={to}",
             name="/route",
-        )
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 404):
+                resp.success()
+            else:
+                resp.failure(f"Unexpected status {resp.status_code}")
 
     @task(4)
     def predict(self):
