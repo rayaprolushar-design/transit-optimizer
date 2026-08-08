@@ -222,7 +222,7 @@ async def health():
 @app.get("/", tags=["frontend"])
 async def root(request: Request):
     index_file = DIST_DIR / "index.html"
-    if index_file.exists() and "text/html" in request.headers.get("accept", ""):
+    if index_file.exists():
         return FileResponse(index_file)
     return await health()
 
