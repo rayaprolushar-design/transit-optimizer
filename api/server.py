@@ -28,6 +28,8 @@ from typing import Optional
 import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -186,6 +188,10 @@ app.add_middleware(
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
+DIST_DIR = Path(__file__).parent.parent / "transit-dashboard" / "dist"
+if (DIST_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
+
 
 @app.middleware("http")
 async def count_requests(request: Request, call_next):
@@ -201,7 +207,7 @@ async def count_requests(request: Request, call_next):
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
-@app.get("/", response_model=HealthResponse, tags=["health"])
+@app.get("/health", response_model=HealthResponse, tags=["health"])
 async def health():
     return HealthResponse(
         status="ok", version="2.0.0",
@@ -211,6 +217,14 @@ async def health():
         model=state.model_meta.get("model_name", ""),
         requests_served=state.requests,
     )
+
+
+@app.get("/", tags=["frontend"])
+async def root(request: Request):
+    index_file = DIST_DIR / "index.html"
+    if index_file.exists() and "text/html" in request.headers.get("accept", ""):
+        return FileResponse(index_file)
+    return await health()
 
 
 @app.get("/stops", response_model=list[StopInfo], tags=["stops"])
@@ -1282,6 +1296,15 @@ async def report_actual_delay(
         return {"recorded": True,
                 "drift_status": m.drift_detector.status()["drift_status"]}
     return {"recorded": False}
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa_paths(full_path: str, request: Request):
+    index_file = DIST_DIR / "index.html"
+    if index_file.exists() and not full_path.startswith(("api", "docs", "openapi", "ws")):
+        return FileResponse(index_file)
+    raise HTTPException(404, "Not Found")
+
 
 
 

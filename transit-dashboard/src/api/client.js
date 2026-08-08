@@ -1,6 +1,17 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'https://transit-optimizer-production-cea3.up.railway.app');
+const getBaseURL = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://127.0.0.1:8000';
+    }
+  }
+  return 'https://transit-optimizer-production-cea3.up.railway.app';
+};
+
+const baseURL = getBaseURL();
 
 const axiosInstance = axios.create({
   baseURL,

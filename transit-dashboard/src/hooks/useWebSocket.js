@@ -14,14 +14,16 @@ export const useWebSocket = (urlPath = '/ws') => {
         const base = wsUrl.replace(/\/$/, '');
         wsUrl = `${base}${urlPath}`;
       }
-    } else {
-      if (import.meta.env.DEV) {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host;
-        wsUrl = `${protocol}//${host}${urlPath}`;
+    } else if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        wsUrl = `ws://127.0.0.1:8000${urlPath}`;
       } else {
-        wsUrl = `wss://transit-optimizer-production-cea3.up.railway.app${urlPath}`;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}${urlPath}`;
       }
+    } else {
+      wsUrl = `wss://transit-optimizer-production-cea3.up.railway.app${urlPath}`;
     }
 
     setStatus('connecting');
