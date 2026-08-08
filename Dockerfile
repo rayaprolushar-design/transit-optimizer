@@ -1,49 +1,34 @@
-# ── Stage 1: builder ─────────────────────────────────────────────────────────
-# Install dependencies in a separate layer so they're cached by Docker.
-# If only code changes, Docker reuses the dep layer → faster rebuilds.
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements first (cache layer — only invalidated if requirements change)
+# Install system dependencies (libgomp1 is required for OpenMP in scipy/sklearn/numpy/prophet)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
-# ── Stage 2: runtime ──────────────────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+# Copy all application directories and files
+COPY . .
 
-WORKDIR /app
-
-# Copy installed packages from builder (avoids reinstalling)
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code
-COPY api/        ./api/
-COPY scripts/    ./scripts/
-COPY data/       ./data/
-COPY delivery/   ./delivery/
-COPY multimodal/ ./multimodal/
-COPY infra/      ./infra/
-COPY main.py     .
-
-# Create logs dir (mounted as volume in production)
+# Create logs directory
 RUN mkdir -p logs
 
-# Non-root user for security (best practice)
+# Non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser /app
 USER appuser
 
-# Expose port (Railway reads this)
+# Expose default port
 EXPOSE 8000
 
-# Health check — Railway uses this to confirm the container is alive
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD python -c "import urllib.request, os; port = os.environ.get('PORT', '8000'); urllib.request.urlopen('http://localhost:' + port + '/')"
+# Health check — uses 127.0.0.1 explicitly to avoid IPv6 localhost resolution mismatch
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request, os; port = os.environ.get('PORT', '8000'); urllib.request.urlopen('http://127.0.0.1:' + port + '/')"
 
-# Start the server
-# --host 0.0.0.0  → listen on all interfaces (required in containers)
-# --port $PORT    → dynamic port assignment for Railway (defaults to 8000)
-# --workers 2     → 2 processes for concurrent requests
+# Start the server with dynamic PORT support for Railway
 CMD ["sh", "-c", "uvicorn api.server:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]

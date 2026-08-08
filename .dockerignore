@@ -7,8 +7,7 @@ __pycache__/
 .dockerignore
 venv/
 .venv/
-data/delay_features.csv
-data/gtfs/
+transit-dashboard/
 logs/
 .pytest_cache/
 .coverage
