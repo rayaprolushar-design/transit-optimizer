@@ -8,7 +8,7 @@ const getBaseURL = () => {
       return 'http://127.0.0.1:8000';
     }
   }
-  return 'https://transit-optimizer-production-cea3.up.railway.app';
+  return 'https://transit-optimizer-production-7adb.up.railway.app';
 };
 
 const baseURL = getBaseURL();

@@ -23,7 +23,7 @@ export const useWebSocket = (urlPath = '/ws') => {
         wsUrl = `${protocol}//${window.location.host}${urlPath}`;
       }
     } else {
-      wsUrl = `wss://transit-optimizer-production-cea3.up.railway.app${urlPath}`;
+      wsUrl = `wss://transit-optimizer-production-7adb.up.railway.app${urlPath}`;
     }
 
     setStatus('connecting');
