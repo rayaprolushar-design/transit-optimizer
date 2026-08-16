@@ -1,29 +1,31 @@
 {
   "expo": {
-    "name": "transit-mobile",
-    "slug": "transit-mobile",
+    "name": "Transit Optimizer",
+    "slug": "transit-optimizer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "ios": {
-      "supportsTablet": true
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#030712"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+        "backgroundColor": "#030712"
+      },
+      "package": "com.srikar.transitoptimizer"
     },
-    "scheme": "transit-mobile",
-    "web": {
-      "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+    "ios": {
+      "bundleIdentifier": "com.srikar.transitoptimizer"
     },
     "plugins": [
-      "expo-router"
-    ]
+      "expo-router",
+      "expo-location",
+      [
+        "expo-notifications",
+        { "color": "#378ADD" }
+      ]
+    ],
+    "scheme": "transit"
   }
 }
