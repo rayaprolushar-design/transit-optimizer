@@ -1,60 +1,59 @@
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../constants/config";
+/**
+ * app/_layout.js
+ * Root layout — sets up tab navigation with 4 tabs.
+ * Expo Router automatically creates routes from files in app/.
+ */
+import { Tabs } from "expo-router"
+import { Ionicons } from "@expo/vector-icons"
+import { COLORS } from "../constants/config"
 
 export default function Layout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: COLORS.brand,
-        tabBarInactiveTintColor: COLORS.dim,
+        headerStyle:      { backgroundColor: COLORS.surface },
+        headerTintColor:  COLORS.text,
+        headerTitleStyle: { fontWeight: "600" },
         tabBarStyle: {
-          backgroundColor: COLORS.card,
-          borderTopColor: COLORS.border,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
+          backgroundColor: COLORS.surface,
+          borderTopColor:  COLORS.border,
         },
-        headerStyle: {
-          backgroundColor: COLORS.card,
-          borderBottomColor: COLORS.border,
-          borderBottomWidth: 0.5,
-        },
-        headerTintColor: COLORS.text,
-        headerTitleStyle: {
-          fontWeight: "700",
-          fontSize: 16,
-        },
+        tabBarActiveTintColor:   COLORS.brand,
+        tabBarInactiveTintColor: COLORS.dim,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Route Planner",
-          tabBarIcon: ({ color, size }) => <Ionicons name="navigate" size={size} color={color} />,
+          title:    "Route Planner",
+          tabBarIcon: ({ color, size }) =>
+            <Ionicons name="navigate" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="predict"
         options={{
-          title: "ML Predictor",
-          tabBarIcon: ({ color, size }) => <Ionicons name="speedometer" size={size} color={color} />,
+          title:    "Delay",
+          tabBarIcon: ({ color, size }) =>
+            <Ionicons name="time" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="live"
         options={{
-          title: "Live Feed",
-          tabBarIcon: ({ color, size }) => <Ionicons name="pulse" size={size} color={color} />,
+          title:    "Live Feed",
+          tabBarIcon: ({ color, size }) =>
+            <Ionicons name="radio" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="board"
         options={{
-          title: "Display Board",
-          tabBarIcon: ({ color, size }) => <Ionicons name="time" size={size} color={color} />,
+          title:    "Board",
+          tabBarIcon: ({ color, size }) =>
+            <Ionicons name="bus" size={size} color={color} />,
         }}
       />
     </Tabs>
-  );
+  )
 }
