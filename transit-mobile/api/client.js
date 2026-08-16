@@ -12,12 +12,21 @@ export const api = {
     return res.json();
   },
   async predictDelay(payload) {
-    const res = await fetch(`${API_URL}/predict-delay-ci`, {
+    const res = await fetch(`${API_URL}/predict-delay`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("Failed to predict delay");
+    return res.json();
+  },
+  async predictCI(payload) {
+    const res = await fetch(`${API_URL}/predict-delay-ci`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to predict delay with confidence intervals");
     return res.json();
   },
   async getBoard(stopId) {

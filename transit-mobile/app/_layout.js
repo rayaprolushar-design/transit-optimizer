@@ -35,7 +35,7 @@ export default function Layout() {
         }}
       />
       <Tabs.Screen
-        name="predictor"
+        name="predict"
         options={{
           title: "ML Predictor",
           tabBarIcon: ({ color, size }) => <Ionicons name="speedometer" size={size} color={color} />,
