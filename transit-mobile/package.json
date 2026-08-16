@@ -1,0 +1,26 @@
+{
+  "name": "transit-mobile",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@react-native-community/slider": "5.2.0",
+    "@react-navigation/bottom-tabs": "^7.18.16",
+    "@react-navigation/native": "^7.3.16",
+    "expo": "~57.0.13",
+    "expo-notifications": "~57.0.11",
+    "expo-status-bar": "~57.0.1",
+    "lucide-react-native": "^1.31.0",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-maps": "1.27.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
