@@ -1,63 +1,61 @@
-import { useState, useEffect, useRef } from "react";
-import { WS_URL } from "../constants/config";
+/**
+ * hooks/useWebSocket.js
+ * Connects to the FastAPI WebSocket live feed.
+ * Auto-reconnects with exponential backoff.
+ * Identical logic to the web dashboard version.
+ */
+import { useState, useEffect, useRef, useCallback } from "react"
+import { WS_URL } from "../constants/config"
 
 export function useWebSocket() {
-  const [events, setEvents] = useState([]);
-  const [connected, setConnected] = useState(false);
-  const socketRef = useRef(null);
+  const [events,    setEvents]    = useState([])
+  const [connected, setConnected] = useState(false)
+  const wsRef    = useRef(null)
+  const retryRef = useRef(0)
+  const timerRef = useRef(null)
 
-  useEffect(() => {
-    let active = true;
-
-    function connect() {
-      if (!active) return;
-      
-      const ws = new WebSocket(WS_URL);
-      socketRef.current = ws;
+  const connect = useCallback(() => {
+    try {
+      const ws = new WebSocket(WS_URL)
+      wsRef.current = ws
 
       ws.onopen = () => {
-        if (active) setConnected(true);
-      };
+        setConnected(true)
+        retryRef.current = 0
+      }
 
       ws.onmessage = (e) => {
-        if (!active) return;
         try {
-          const data = JSON.parse(e.data);
-          
-          // Inject a unique ID if missing
-          const eventItem = {
-            id: Math.random().toString(36).substring(2, 9),
-            ...data,
-          };
-          
-          setEvents((prev) => [eventItem, ...prev].slice(0, 50));
-        } catch (err) {
-          console.error("Error parsing WebSocket message:", err);
-        }
-      };
+          const event = JSON.parse(e.data)
+          setEvents(prev => [
+            { ...event, id: Date.now() + Math.random() },
+            ...prev.slice(0, 19),
+          ])
+        } catch (_) {}
+      }
 
       ws.onclose = () => {
-        if (active) {
-          setConnected(false);
-          // Auto-reconnect after 5 seconds
-          setTimeout(connect, 5000);
+        setConnected(false)
+        if (retryRef.current < 6) {
+          const delay = Math.min(1000 * 2 ** retryRef.current, 30000)
+          retryRef.current++
+          timerRef.current = setTimeout(connect, delay)
         }
-      };
-
-      ws.onerror = () => {
-        if (active) setConnected(false);
-      };
-    }
-
-    connect();
-
-    return () => {
-      active = false;
-      if (socketRef.current) {
-        socketRef.current.close();
       }
-    };
-  }, []);
 
-  return { events, connected };
+      ws.onerror = () => ws.close()
+    } catch (_) {
+      setConnected(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    connect()
+    return () => {
+      clearTimeout(timerRef.current)
+      wsRef.current?.close()
+    }
+  }, [connect])
+
+  return { events, connected }
 }
