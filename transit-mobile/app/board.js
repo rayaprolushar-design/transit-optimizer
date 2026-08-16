@@ -1,170 +1,231 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { api } from '../api/client';
-import { COLORS } from '../constants/config';
+/**
+ * app/board.js — Display Board tab
+ * Shows next arrivals at a selected stop.
+ * Polls GET /board/{stop_id} every 30 seconds.
+ * Same data as the Raspberry Pi display board — on your phone.
+ */
+import { useState, useEffect, useCallback } from "react"
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, RefreshControl,
+} from "react-native"
+import { Ionicons } from "@expo/vector-icons"
+import { api } from "../api/client"
+import { COLORS } from "../constants/config"
 
 const S = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: { padding: 14, backgroundColor: COLORS.card, borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
-  label:     { color: COLORS.sub, fontSize: 11, marginBottom: 4, marginTop: 10,
-               textTransform: "uppercase", letterSpacing: 0.5 },
-  dropdownTrigger: {
-    backgroundColor: COLORS.surface, borderRadius: 10, height: 44,
-    paddingHorizontal: 12, justifyContent: 'center', borderWidth: 0.5, borderColor: COLORS.border,
-  },
-  dropdownTriggerText: { color: COLORS.text, fontSize: 14 },
-  dropdownList: {
-    backgroundColor: COLORS.surface, borderRadius: 10, borderWidth: 0.5,
-    borderColor: COLORS.border, maxHeight: 180, marginTop: 4,
-  },
-  dropdownItem: { padding: 12, borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
-  dropdownItemText: { color: COLORS.text, fontSize: 13 },
-  timerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  timerText: { color: COLORS.dim, fontSize: 12, marginLeft: 6, flex: 1 },
-  refreshButton: { padding: 4 },
-  
-  content: { flex: 1, padding: 14 },
-  boardCard: { backgroundColor: COLORS.card, borderRadius: 10, borderWidth: 0.5, borderColor: COLORS.border, overflow: 'hidden' },
-  boardHeader: { padding: 12, borderBottomWidth: 0.5, borderBottomColor: COLORS.border, backgroundColor: COLORS.card },
-  boardTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
-  boardSubtitle: { color: COLORS.brand, fontSize: 11, fontWeight: '600', marginTop: 2 },
-  
-  tableHeader: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: COLORS.surface, borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
-  tableLabel: { color: COLORS.dim, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
-  routeValue: { color: COLORS.brand, fontSize: 13, fontWeight: '700' },
-  textValue: { color: COLORS.text, fontSize: 13 },
-  predValue: { color: COLORS.text, fontSize: 13, fontWeight: '700' },
-  statusValue: { fontSize: 12, fontWeight: '600' },
-  noArrivals: { alignItems: 'center', paddingVertical: 32 },
-  noArrivalsText: { color: COLORS.dim, fontSize: 13 },
-});
+  container:  { flex: 1, backgroundColor: COLORS.bg },
+  stopBar:    { flexDirection:"row", flexWrap:"wrap", gap:6, padding:12,
+                borderBottomWidth:0.5, borderBottomColor:COLORS.border },
+  stopChip:   { paddingHorizontal:10, paddingVertical:5, borderRadius:20,
+                borderWidth:0.5 },
+  stopText:   { fontSize:12, fontWeight:"500" },
+  body:       { flex:1 },
+  heroCard:   { margin:14, backgroundColor:COLORS.card, borderRadius:14,
+                padding:16, borderWidth:0.5, borderColor:COLORS.border },
+  heroName:   { color:COLORS.text, fontSize:20, fontWeight:"700", marginBottom:4 },
+  heroRow:    { flexDirection:"row", alignItems:"center", gap:8 },
+  heroDelay:  { fontSize:13, fontWeight:"600" },
+  heroDot:    { width:8, height:8, borderRadius:4 },
+  sectionTitle:{ color:COLORS.sub, fontSize:11, fontWeight:"500",
+                 textTransform:"uppercase", letterSpacing:0.5,
+                 marginHorizontal:14, marginBottom:8 },
+  arrivalCard:{ marginHorizontal:14, marginBottom:8, backgroundColor:COLORS.card,
+                borderRadius:12, padding:12, borderWidth:0.5,
+                borderColor:COLORS.border },
+  arrRow:     { flexDirection:"row", alignItems:"center", justifyContent:"space-between" },
+  routeBadge: { backgroundColor:COLORS.brand+"22", paddingHorizontal:10,
+                paddingVertical:4, borderRadius:8, borderWidth:0.5,
+                borderColor:COLORS.brand },
+  routeText:  { color:COLORS.brand, fontWeight:"700", fontSize:14 },
+  destText:   { color:COLORS.text, fontSize:14, flex:1, marginLeft:10 },
+  timeBlock:  { alignItems:"flex-end" },
+  predTime:   { fontSize:15, fontWeight:"600", fontVariant:["tabular-nums"] },
+  schedTime:  { fontSize:11, color:COLORS.dim, marginTop:2, fontVariant:["tabular-nums"] },
+  statusPill: { marginTop:6, alignSelf:"flex-start", paddingHorizontal:8,
+                paddingVertical:2, borderRadius:20, borderWidth:0.5 },
+  statusText: { fontSize:11, fontWeight:"500" },
+  confDot:    { width:7, height:7, borderRadius:3.5, position:"absolute",
+                top:6, right:6 },
+  empty:      { alignItems:"center", padding:40 },
+  emptyText:  { color:COLORS.dim, fontSize:14, marginTop:8 },
+  ticker:     { padding:10, borderTopWidth:0.5, borderTopColor:COLORS.border,
+                flexDirection:"row", justifyContent:"space-between" },
+  tickerText: { color:COLORS.dim, fontSize:11 },
+})
 
-export default function Board() {
-  const [stops, setStops] = useState([]);
-  const [selectedStop, setSelectedStop] = useState(null);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [boardData, setBoardData] = useState(null);
-  const [countdown, setCountdown] = useState(30);
+const QUICK_STOPS = [
+  { stop_id:"S001", name:"MG Road" },
+  { stop_id:"S004", name:"Indiranagar" },
+  { stop_id:"S006", name:"Koramangala" },
+  { stop_id:"S007", name:"BTM Layout" },
+  { stop_id:"S017", name:"HSR Layout" },
+  { stop_id:"S020", name:"Silk Board" },
+]
 
-  useEffect(() => {
-    api.getStops().then(data => {
-      setStops(data);
-      if (data.length > 0) setSelectedStop(data[0]);
-    }).catch(() => {});
-  }, []);
+const statusStyle = (delay) => {
+  if (delay > 3) return { bg:"#450a0a", border:COLORS.red,    text:COLORS.red }
+  if (delay > 1) return { bg:"#422006", border:COLORS.yellow, text:COLORS.yellow }
+  return              { bg:"#052e16", border:COLORS.teal,   text:COLORS.teal }
+}
 
-  const fetchBoard = async () => {
-    if (!selectedStop) return;
-    setLoading(true);
+const confColor = (conf) =>
+  conf === "high" ? COLORS.teal : conf === "medium" ? COLORS.yellow : COLORS.red
+
+export default function BoardScreen() {
+  const [selectedStop, setSelectedStop] = useState(QUICK_STOPS[0])
+  const [board,        setBoard]        = useState(null)
+  const [loading,      setLoading]      = useState(false)
+  const [refreshing,   setRefreshing]   = useState(false)
+  const [lastUpdated,  setLastUpdated]  = useState(null)
+
+  const fetchBoard = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    else           setLoading(true)
     try {
-      const data = await api.getBoard(selectedStop.stop_id);
-      setBoardData(data);
-      setCountdown(30);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      const data = await api.boardData(selectedStop.stop_id)
+      setBoard(data)
+      setLastUpdated(new Date().toLocaleTimeString("en-IN"))
+    } catch (_) {}
+    finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-  };
+  }, [selectedStop])
 
+  // Fetch on mount and every 30s
   useEffect(() => {
-    fetchBoard();
-  }, [selectedStop]);
+    fetchBoard()
+    const interval = setInterval(() => fetchBoard(), 30000)
+    return () => clearInterval(interval)
+  }, [fetchBoard])
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          fetchBoard();
-          return 30;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [selectedStop]);
+  const liveDelay = board?.live_delay ?? 0
+  const delayColor = liveDelay > 3 ? COLORS.red :
+                     liveDelay > 1 ? COLORS.yellow : COLORS.teal
 
   return (
     <View style={S.container}>
-      <View style={S.header}>
-        <Text style={S.label}>Select Station Board</Text>
-        <TouchableOpacity style={S.dropdownTrigger} onPress={() => setShowDropdown(!showDropdown)}>
-          <Text style={S.dropdownTriggerText}>
-            {selectedStop ? selectedStop.name : 'Select stop...'}
-          </Text>
-        </TouchableOpacity>
-        {showDropdown && (
-          <View style={S.dropdownList}>
-            {stops.map(s => (
-              <TouchableOpacity key={s.stop_id} style={S.dropdownItem} onPress={() => { setSelectedStop(s); setShowDropdown(false) }}>
-                <Text style={S.dropdownItemText}>{s.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
 
-        <View style={S.timerRow}>
-          <Ionicons name="time-outline" size={14} color={COLORS.dim} />
-          <Text style={S.timerText}>Auto-refresh in {countdown}s</Text>
-          <TouchableOpacity onPress={fetchBoard} style={S.refreshButton}>
-            <Ionicons name="refresh" size={14} color={COLORS.brand} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView style={S.content}>
-        {loading && !boardData && <ActivityIndicator color={COLORS.brand} style={{ marginTop: 32 }} />}
-
-        {boardData && (
-          <View style={S.boardCard}>
-            <View style={S.boardHeader}>
-              <Text style={S.boardTitle}>{boardData.stop_name} departures</Text>
-              {boardData.live_delay && (
-                <Text style={S.boardSubtitle}>
-                  Current Live Delay: {Math.round(boardData.live_delay / 60)} min
-                </Text>
-              )}
-            </View>
-
-            <View style={S.tableHeader}>
-              <Text style={[S.tableLabel, { width: '15%' }]}>Route</Text>
-              <Text style={[S.tableLabel, { width: '35%' }]}>Destination</Text>
-              <Text style={[S.tableLabel, { width: '15%' }]}>Sched</Text>
-              <Text style={[S.tableLabel, { width: '15%' }]}>Pred</Text>
-              <Text style={[S.tableLabel, { width: '20%', textAlign: 'right' }]}>Status</Text>
-            </View>
-
-            {boardData.arrivals && boardData.arrivals.length === 0 ? (
-              <View style={S.noArrivals}>
-                <Ionicons name="alert-circle" size={24} color={COLORS.dim} style={{ marginBottom: 8 }} />
-                <Text style={S.noArrivalsText}>No upcoming departures</Text>
-              </View>
-            ) : (
-              boardData.arrivals && boardData.arrivals.map((arr, idx) => (
-                <View key={idx} style={S.tableRow}>
-                  <Text style={[S.routeValue, { width: '15%' }]}>{arr.route}</Text>
-                  <Text style={[S.textValue, { width: '35%' }]} numberOfLines={1}>{arr.destination}</Text>
-                  <Text style={[S.textValue, { width: '15%' }]}>{arr.scheduled_time}</Text>
-                  <Text style={[S.predValue, { width: '15%' }]}>{arr.predicted_time}</Text>
-                  <Text style={[
-                    S.statusValue, 
-                    { 
-                      width: '20%', 
-                      textAlign: 'right',
-                      color: arr.delay_minutes > 5 ? '#FF6B6B' : (arr.delay_minutes > 0 ? COLORS.yellow : COLORS.teal)
-                    }
-                  ]}>
-                    {arr.status || 'On Time'}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
-        )}
+      {/* Quick stop selector */}
+      <ScrollView
+        horizontal showsHorizontalScrollIndicator={false}
+        style={S.stopBar}
+        contentContainerStyle={{ gap: 6, paddingRight: 14 }}
+      >
+        {QUICK_STOPS.map(s => {
+          const active = s.stop_id === selectedStop.stop_id
+          return (
+            <TouchableOpacity
+              key={s.stop_id}
+              style={[S.stopChip, {
+                backgroundColor: active ? COLORS.brand+"22" : COLORS.card,
+                borderColor:     active ? COLORS.brand       : COLORS.border,
+              }]}
+              onPress={() => setSelectedStop(s)}
+            >
+              <Text style={[S.stopText, { color: active ? COLORS.brand : COLORS.sub }]}>
+                {s.name}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
       </ScrollView>
+
+      {loading && !board ? (
+        <View style={{ flex:1, alignItems:"center", justifyContent:"center" }}>
+          <ActivityIndicator color={COLORS.brand} size="large" />
+        </View>
+      ) : (
+        <ScrollView
+          style={S.body}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => fetchBoard(true)}
+              tintColor={COLORS.brand}
+            />
+          }
+        >
+          {/* Hero card */}
+          {board && (
+            <View style={S.heroCard}>
+              <Text style={S.heroName}>{board.stop_name}</Text>
+              <View style={S.heroRow}>
+                <View style={[S.heroDot, { backgroundColor: delayColor }]} />
+                <Text style={[S.heroDelay, { color: delayColor }]}>
+                  {liveDelay > 0
+                    ? `Live GPS delay: +${liveDelay.toFixed(1)} min`
+                    : "Running on schedule"}
+                </Text>
+              </View>
+              <Text style={{ color:COLORS.dim, fontSize:11, marginTop:6 }}>
+                {board.has_gps ? "● Live GPS" : "◌ Simulated"} · {board.arrivals?.length ?? 0} arrivals
+              </Text>
+            </View>
+          )}
+
+          {/* Arrivals */}
+          <Text style={S.sectionTitle}>Next arrivals</Text>
+
+          {board?.arrivals?.length === 0 && (
+            <View style={S.empty}>
+              <Ionicons name="bus-outline" size={40} color={COLORS.dim} />
+              <Text style={S.emptyText}>No upcoming arrivals</Text>
+            </View>
+          )}
+
+          {board?.arrivals?.map((arr, i) => {
+            const delay = arr.delay_minutes ?? 0
+            const st    = statusStyle(delay)
+            return (
+              <View key={i} style={S.arrivalCard}>
+                <View style={S.arrRow}>
+                  <View style={S.routeBadge}>
+                    <Text style={S.routeText}>{arr.route}</Text>
+                  </View>
+                  <Text style={S.destText} numberOfLines={1}>
+                    {arr.destination}
+                  </Text>
+                  <View style={S.timeBlock}>
+                    <Text style={[S.predTime, { color:
+                      delay > 3 ? COLORS.red :
+                      delay > 1 ? COLORS.yellow : COLORS.text }]}>
+                      {arr.predicted_time}
+                    </Text>
+                    <Text style={S.schedTime}>Sched: {arr.scheduled_time}</Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection:"row", alignItems:"center", gap:8, marginTop:8 }}>
+                  <View style={[S.statusPill, { backgroundColor:st.bg, borderColor:st.border }]}>
+                    <Text style={[S.statusText, { color:st.text }]}>{arr.status}</Text>
+                  </View>
+                  <View style={[S.statusPill, {
+                    backgroundColor: COLORS.card, borderColor: COLORS.border,
+                  }]}>
+                    <Text style={[S.statusText, { color: confColor(arr.confidence) }]}>
+                      {arr.confidence} conf
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )
+          })}
+
+          <View style={{ height: 20 }} />
+        </ScrollView>
+      )}
+
+      {/* Footer ticker */}
+      <View style={S.ticker}>
+        <Text style={S.tickerText}>
+          Auto-refresh every 30s · Pull to refresh
+        </Text>
+        {lastUpdated && (
+          <Text style={S.tickerText}>Updated: {lastUpdated}</Text>
+        )}
+      </View>
     </View>
-  );
+  )
 }

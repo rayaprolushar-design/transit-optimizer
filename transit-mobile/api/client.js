@@ -29,7 +29,7 @@ export const api = {
     if (!res.ok) throw new Error("Failed to predict delay with confidence intervals");
     return res.json();
   },
-  async getBoard(stopId) {
+  async boardData(stopId) {
     const res = await fetch(`${API_URL}/board/${stopId}`);
     if (!res.ok) throw new Error("Failed to fetch departure board");
     return res.json();
