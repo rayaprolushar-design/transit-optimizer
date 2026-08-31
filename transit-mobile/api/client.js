@@ -9,7 +9,10 @@ import { API_URL } from "../constants/config"
 const client = axios.create({
   baseURL: API_URL,
   timeout: 10000,
-  headers: { "Content-Type": "application/json" },
+  headers: { 
+    "Content-Type": "application/json",
+    "Bypass-Tunnel-Reminder": "true"
+  },
 })
 
 client.interceptors.response.use(

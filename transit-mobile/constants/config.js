@@ -1,9 +1,9 @@
 /**
  * constants/config.js
- * Configured pointing to your local laptop IP: 10.18.29.211
+ * Configured pointing to your public Localtunnel endpoint: https://rude-planes-sink.loca.lt
  */
-export const API_URL = "http://10.18.29.211:8000"
-export const WS_URL  = "ws://10.18.29.211:8000/ws/live-feed"
+export const API_URL = "https://rude-planes-sink.loca.lt"
+export const WS_URL  = "wss://rude-planes-sink.loca.lt/ws/live-feed"
 
 export const COLORS = {
   bg:      "#030712",
