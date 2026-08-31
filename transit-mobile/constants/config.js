@@ -1,9 +1,9 @@
 /**
  * constants/config.js
- * Configured pointing to the active Railway deployment: transit-optimizer-production-7adb.up.railway.app
+ * Configured pointing to your local laptop IP: 10.18.29.211
  */
-export const API_URL = "https://transit-optimizer-production-7adb.up.railway.app"
-export const WS_URL  = "wss://transit-optimizer-production-7adb.up.railway.app/ws/live-feed"
+export const API_URL = "http://10.18.29.211:8000"
+export const WS_URL  = "ws://10.18.29.211:8000/ws/live-feed"
 
 export const COLORS = {
   bg:      "#030712",
