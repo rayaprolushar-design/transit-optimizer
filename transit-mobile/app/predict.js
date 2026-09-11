@@ -1,47 +1,53 @@
 /**
- * app/predict.js — Delay Predictor tab
- * Slider-based delay prediction with p10/p50/p90 confidence intervals.
- * Calls POST /predict-delay-ci on your Railway backend.
- * Auto-predicts when stop or hour changes.
+ * app/predict.js — Delay Predictor (auto-detect redesign)
+ * - No manual sliders
+ * - Auto-reads live GPS delay from /live-delays/{stop_id}
+ * - Shows p10/p50/p90 cleanly
+ * - Stop picker is the only input needed
  */
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert,
+  ActivityIndicator, RefreshControl,
 } from "react-native"
-import Slider from "@react-native-community/slider"
 import { Ionicons } from "@expo/vector-icons"
 import { api } from "../api/client"
 import { COLORS } from "../constants/config"
 
 const S = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  body:      { padding: 14 },
-  card:      { backgroundColor: COLORS.card, borderRadius: 12, padding: 14,
-               borderWidth: 0.5, borderColor: COLORS.border, marginBottom: 12 },
-  label:     { color: COLORS.sub, fontSize: 11, marginBottom: 8,
-               textTransform: "uppercase", letterSpacing: 0.5 },
-  row:       { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  val:       { color: COLORS.text, fontWeight: "600", fontSize: 13, fontVariant: ["tabular-nums"] },
-  big:       { color: COLORS.text, fontSize: 48, fontWeight: "700",
-               textAlign: "center", marginVertical: 8, fontVariant: ["tabular-nums"] },
-  bigUnit:   { fontSize: 18, color: COLORS.sub, fontWeight: "400" },
-  confBadge: { alignSelf: "center", paddingHorizontal: 14, paddingVertical: 5,
-               borderRadius: 20, borderWidth: 0.5, marginBottom: 10 },
-  confText:  { fontSize: 13, fontWeight: "600", textAlign: "center" },
-  interp:    { color: COLORS.sub, fontSize: 13, textAlign: "center", lineHeight: 18 },
-  ci:        { flexDirection: "row", justifyContent: "space-around", marginTop: 10 },
-  ciBox:     { alignItems: "center" },
-  ciLabel:   { color: COLORS.dim, fontSize: 11 },
-  ciVal:     { fontWeight: "600", fontSize: 16, marginTop: 2, fontVariant:["tabular-nums"] },
-  stopBtn:   { backgroundColor: COLORS.surface, borderRadius: 10, padding: 10,
-               borderWidth: 0.5, borderColor: COLORS.border, marginBottom: 6 },
-  stopText:  { color: COLORS.text, fontSize: 14 },
-  stopSub:   { color: COLORS.dim, fontSize: 11 },
-  toggle:    { flexDirection: "row", gap: 8, marginTop: 6 },
-  pill:      { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-               borderWidth: 0.5 },
-  pillText:  { fontSize: 12, fontWeight: "500" },
+  container:   { flex: 1, backgroundColor: COLORS.bg },
+  stopGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 8, padding: 12 },
+  stopChip:    { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+                 borderWidth: 0.5, minWidth: "44%" },
+  stopText:    { fontSize: 13, fontWeight: "500", textAlign: "center" },
+  section:     { paddingHorizontal: 14, marginTop: 6 },
+  sLabel:      { color: COLORS.sub, fontSize: 11, textTransform: "uppercase",
+                 letterSpacing: 0.5, marginBottom: 8 },
+  card:        { backgroundColor: COLORS.card, borderRadius: 14, padding: 16,
+                 borderWidth: 0.5, borderColor: COLORS.border, marginBottom: 12 },
+  bigDelay:    { fontSize: 52, fontWeight: "800", textAlign: "center",
+                 fontVariant: ["tabular-nums"], marginVertical: 4 },
+  unit:        { fontSize: 20, fontWeight: "400" },
+  confBadge:   { alignSelf: "center", paddingHorizontal: 16, paddingVertical: 6,
+                 borderRadius: 20, borderWidth: 0.5, marginBottom: 8 },
+  confText:    { fontSize: 13, fontWeight: "600", textAlign: "center" },
+  interp:      { color: COLORS.sub, fontSize: 13, textAlign: "center",
+                 lineHeight: 18, marginBottom: 12 },
+  ciRow:       { flexDirection: "row", justifyContent: "space-around",
+                 paddingTop: 12, borderTopWidth: 0.5, borderTopColor: COLORS.border },
+  ciBox:       { alignItems: "center" },
+  ciLabel:     { color: COLORS.dim, fontSize: 11 },
+  ciVal:       { fontWeight: "700", fontSize: 17, marginTop: 3,
+                 fontVariant: ["tabular-nums"] },
+  infoRow:     { flexDirection: "row", alignItems: "center", gap: 8,
+                 marginTop: 12, padding: 10, backgroundColor: COLORS.surface,
+                 borderRadius: 10 },
+  infoText:    { color: COLORS.sub, fontSize: 12, flex: 1, lineHeight: 17 },
+  autoTag:     { flexDirection: "row", alignItems: "center", gap: 4,
+                 alignSelf: "center", marginBottom: 6 },
+  autoText:    { color: COLORS.teal, fontSize: 12, fontWeight: "500" },
+  emptyState:  { alignItems: "center", paddingVertical: 40 },
+  emptyText:   { color: COLORS.dim, fontSize: 14, marginTop: 10 },
 })
 
 const CONF_COLORS = {
@@ -50,202 +56,240 @@ const CONF_COLORS = {
   low:    { bg:"#450a0a", border:COLORS.red,    text:COLORS.red },
 }
 
-function useDebounce(value, delay) {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(t)
-  }, [value, delay])
-  return debounced
+// Quick stops for one-tap selection
+const QUICK_STOPS = [
+  { stop_id:"S001", name:"MG Road" },
+  { stop_id:"S004", name:"Indiranagar" },
+  { stop_id:"S006", name:"Koramangala" },
+  { stop_id:"S007", name:"BTM Layout" },
+  { stop_id:"S017", name:"HSR Layout" },
+  { stop_id:"S020", name:"Silk Board" },
+  { stop_id:"S013", name:"Hebbal" },
+  { stop_id:"S021", name:"MG Road Metro" },
+]
+
+function formatDelay(min) {
+  if (min < 1)  return "On time"
+  if (min < 60) return `${Math.round(min)} min`
+  const h = Math.floor(min / 60)
+  const m = Math.round(min % 60)
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
 export default function DelayPredictor() {
-  const [stops,      setStops]      = useState([])
-  const [stop,       setStop]       = useState(null)
-  const [hour,       setHour]       = useState(8)
-  const [priorDelay, setPriorDelay] = useState(0)
-  const [isWeekend,  setIsWeekend]  = useState(false)
-  const [routeType,  setRouteType]  = useState(3)
-  const [result,     setResult]     = useState(null)
-  const [loading,    setLoading]    = useState(false)
-  const [showStops,  setShowStops]  = useState(false)
+  const [stop,     setStop]     = useState(null)
+  const [result,   setResult]   = useState(null)
+  const [live,     setLive]     = useState(null)     // live GPS delay
+  const [loading,  setLoading]  = useState(false)
+  const [refresh,  setRefresh]  = useState(false)
 
-  const dHour       = useDebounce(hour, 400)
-  const dPriorDelay = useDebounce(priorDelay, 400)
+  const fetchPrediction = useCallback(async (s, isRefresh = false) => {
+    if (!s) return
+    if (isRefresh) setRefresh(true)
+    else           setLoading(true)
 
-  useEffect(() => {
-    api.getStops().then(setStops).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (!stop) return
-    predict()
-  }, [stop, dHour, isWeekend, dPriorDelay, routeType])
-
-  const predict = async () => {
-    if (!stop) return
-    setLoading(true)
     try {
-      const data = await api.predictCI({
-        stop_id:            stop.stop_id,
-        hour:               dHour,
-        is_weekend:         isWeekend ? 1 : 0,
-        prior_stop_delay:   dPriorDelay,
+      // 1. Get live GPS delay for this stop (seeds prior_stop_delay)
+      const liveData = await api.stopDelay(s.stop_id).catch(() => null)
+      const priorDelay = liveData?.live_delay_min ?? 0
+      setLive(liveData)
+
+      // 2. Auto-detect current hour
+      const hour     = new Date().getHours()
+      const isWknd   = new Date().getDay() >= 6 ? 1 : 0
+
+      // 3. Call ML model with real context
+      const pred = await api.predictCI({
+        stop_id:            s.stop_id,
+        hour,
+        is_weekend:         isWknd,
+        prior_stop_delay:   priorDelay,
         temp_deviation:     0.5,
         stop_sequence_norm: 0.0,
-        route_type:         routeType,
+        route_type:         3,
         n_stops_on_trip:    6,
+      }).catch(async () => {
+        // Fallback to regular predict
+        const d = await api.predictDelay({
+          stop_id: s.stop_id, hour, is_weekend: isWknd,
+          prior_stop_delay: priorDelay, temp_deviation: 0.5,
+          stop_sequence_norm: 0.0, route_type: 3, n_stops_on_trip: 6,
+        })
+        return {
+          p10: Math.max(0, d.predicted_delay - (d.model_mae ?? 0.76)),
+          p50: d.predicted_delay,
+          p90: d.predicted_delay + (d.model_mae ?? 0.76),
+          confidence: d.confidence,
+          interpretation: `Predicted: ${d.predicted_delay} min`,
+          model_mae: d.model_mae,
+        }
       })
-      setResult(data)
+      setResult(pred)
     } catch (e) {
-      // fallback to regular prediction
-      try {
-        const data = await api.predictDelay({
-          stop_id: stop.stop_id, hour: dHour, is_weekend: isWeekend ? 1 : 0,
-          prior_stop_delay: dPriorDelay, temp_deviation: 0.5,
-          stop_sequence_norm: 0.0, route_type: routeType, n_stops_on_trip: 6,
-        })
-        setResult({
-          p50: data.predicted_delay, p10: Math.max(0, data.predicted_delay - data.model_mae),
-          p90: data.predicted_delay + data.model_mae,
-          confidence: data.confidence,
-          interpretation: `Predicted delay: ${data.predicted_delay} min`,
-        })
-      } catch (_) {}
+      console.log(e)
     } finally {
       setLoading(false)
+      setRefresh(false)
     }
+  }, [])
+
+  const selectStop = (s) => {
+    setStop(s)
+    setResult(null)
+    fetchPrediction(s)
   }
 
+  // Auto-refresh every 30s when a stop is selected
+  useEffect(() => {
+    if (!stop) return
+    const t = setInterval(() => fetchPrediction(stop, true), 30000)
+    return () => clearInterval(t)
+  }, [stop, fetchPrediction])
+
+  const hour = new Date().getHours()
   const isRush = (hour >= 7 && hour <= 10) || (hour >= 17 && hour <= 20)
-  const conf   = result ? CONF_COLORS[result.confidence] ?? CONF_COLORS.medium : null
+  const conf = result ? (CONF_COLORS[result.confidence] ?? CONF_COLORS.medium) : null
+
+  // Clamp p50 to realistic range (0-60 min)
+  const p50Display = result ? Math.min(result.p50 ?? 0, 60) : 0
+  const p10Display = result ? Math.min(result.p10 ?? 0, 60) : 0
+  const p90Display = result ? Math.min(result.p90 ?? 0, 60) : 0
 
   return (
-    <ScrollView style={S.container} contentContainerStyle={S.body}>
-
-      {/* Stop picker */}
-      <View style={S.card}>
-        <Text style={S.label}>Select stop</Text>
-        <TouchableOpacity style={S.stopBtn} onPress={() => setShowStops(v => !v)}>
-          <Text style={S.stopText}>{stop ? stop.name : "Tap to select a stop…"}</Text>
-          {stop && <Text style={S.stopSub}>{stop.stop_id}</Text>}
-        </TouchableOpacity>
-        {showStops && (
-          <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
-            {stops.map(s => (
-              <TouchableOpacity key={s.stop_id} style={S.stopBtn}
-                onPress={() => { setStop(s); setShowStops(false) }}>
-                <Text style={S.stopText}>{s.name}</Text>
-                <Text style={S.stopSub}>{s.stop_id}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
+    <ScrollView
+      style={S.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refresh}
+          onRefresh={() => fetchPrediction(stop, true)}
+          tintColor={COLORS.brand}
+        />
+      }
+    >
+      {/* Stop quick-select */}
+      <View style={S.section}>
+        <Text style={[S.sLabel, { marginTop: 14 }]}>Select your stop</Text>
+      </View>
+      <View style={S.stopGrid}>
+        {QUICK_STOPS.map(s => {
+          const active = stop?.stop_id === s.stop_id
+          return (
+            <TouchableOpacity
+              key={s.stop_id}
+              style={[S.stopChip, {
+                backgroundColor: active ? COLORS.brand+"22" : COLORS.card,
+                borderColor:     active ? COLORS.brand       : COLORS.border,
+              }]}
+              onPress={() => selectStop(s)}
+            >
+              <Text style={[S.stopText, { color: active ? COLORS.brand : COLORS.sub }]}>
+                {s.name}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
       </View>
 
-      {/* Controls */}
-      <View style={S.card}>
-        <View style={S.row}>
-          <Text style={S.label}>Hour of departure</Text>
-          <Text style={S.val}>
-            {String(hour).padStart(2,"0")}:00
-            {isRush ? "  🔴 Rush" : "  🟢 Off-peak"}
+      {/* Empty state */}
+      {!stop && (
+        <View style={S.emptyState}>
+          <Ionicons name="time-outline" size={48} color={COLORS.dim} />
+          <Text style={S.emptyText}>Tap a stop to see delay prediction</Text>
+          <Text style={{ color: COLORS.dim, fontSize: 12, marginTop: 4 }}>
+            Uses live GPS + current time automatically
           </Text>
         </View>
-        <Slider
-          minimumValue={0} maximumValue={23} step={1} value={hour}
-          onValueChange={setHour}
-          minimumTrackTintColor={COLORS.brand}
-          maximumTrackTintColor={COLORS.border}
-          thumbTintColor={COLORS.brand}
-        />
+      )}
 
-        <View style={[S.row, { marginTop: 12 }]}>
-          <Text style={S.label}>Prior stop delay</Text>
-          <Text style={S.val}>{priorDelay} min</Text>
+      {/* Loading */}
+      {stop && loading && (
+        <View style={[S.card, { marginHorizontal: 14, alignItems: "center", padding: 30 }]}>
+          <ActivityIndicator color={COLORS.brand} size="large" />
+          <Text style={{ color: COLORS.sub, marginTop: 10, fontSize: 13 }}>
+            Reading live GPS data…
+          </Text>
         </View>
-        <Slider
-          minimumValue={0} maximumValue={15} step={0.5} value={priorDelay}
-          onValueChange={setPriorDelay}
-          minimumTrackTintColor={COLORS.yellow}
-          maximumTrackTintColor={COLORS.border}
-          thumbTintColor={COLORS.yellow}
-        />
-
-        <View style={[S.toggle, { marginTop: 10 }]}>
-          {[{v:3,l:"🚌 Bus"},{v:1,l:"🚇 Metro"}].map(({v,l}) => (
-            <TouchableOpacity key={v} style={[S.pill, {
-              backgroundColor: routeType===v ? COLORS.brand+"22" : COLORS.card,
-              borderColor:     routeType===v ? COLORS.brand       : COLORS.border,
-            }]} onPress={() => setRouteType(v)}>
-              <Text style={[S.pillText, { color: routeType===v ? COLORS.brand : COLORS.sub }]}>{l}</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={[S.pill, {
-            backgroundColor: isWeekend ? COLORS.teal+"22" : COLORS.card,
-            borderColor:     isWeekend ? COLORS.teal       : COLORS.border,
-          }]} onPress={() => setIsWeekend(v => !v)}>
-            <Text style={[S.pillText, { color: isWeekend ? COLORS.teal : COLORS.sub }]}>
-              {isWeekend ? "🌤 Weekend" : "Weekend"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      )}
 
       {/* Result */}
-      {!stop && (
-        <View style={[S.card, { alignItems:"center", paddingVertical:30 }]}>
-          <Ionicons name="time-outline" size={40} color={COLORS.dim} />
-          <Text style={[S.interp, { marginTop: 8 }]}>Select a stop above to see predictions</Text>
-        </View>
-      )}
-
-      {stop && loading && (
-        <View style={[S.card, { alignItems:"center", paddingVertical:30 }]}>
-          <ActivityIndicator color={COLORS.brand} />
-          <Text style={[S.interp, { marginTop:8 }]}>Running model…</Text>
-        </View>
-      )}
-
       {stop && !loading && result && (
-        <View style={S.card}>
-          <Text style={[S.label, { textAlign:"center" }]}>
-            {stop.name}
-          </Text>
-          <Text style={S.big}>
-            {result.p50}
-            <Text style={S.bigUnit}> min</Text>
-          </Text>
+        <View style={{ paddingHorizontal: 14 }}>
 
-          <View style={[S.confBadge, {
-            backgroundColor: conf?.bg, borderColor: conf?.border,
-          }]}>
-            <Text style={[S.confText, { color: conf?.text }]}>
-              {result.confidence} confidence
+          {/* Auto-detect badge */}
+          <View style={S.autoTag}>
+            <Ionicons name="locate" size={13} color={COLORS.teal} />
+            <Text style={S.autoText}>
+              Auto-detected · {String(hour).padStart(2,"0")}:00
+              {isRush ? " · Rush hour" : " · Off-peak"}
+              {live?.has_live_data ? " · Live GPS" : ""}
             </Text>
           </View>
 
-          <Text style={S.interp}>{result.interpretation}</Text>
+          {/* Big prediction */}
+          <View style={S.card}>
+            <Text style={{ color: COLORS.sub, fontSize: 13, textAlign: "center" }}>
+              {stop.name}
+            </Text>
+            <Text style={[S.bigDelay, {
+              color: p50Display > 10 ? COLORS.red :
+                     p50Display > 3  ? COLORS.yellow : COLORS.teal
+            }]}>
+              {formatDelay(p50Display)}
+            </Text>
 
-          {/* CI bar */}
-          <View style={S.ci}>
-            <View style={S.ciBox}>
-              <Text style={S.ciLabel}>p10 (best)</Text>
-              <Text style={[S.ciVal, { color: COLORS.teal }]}>{result.p10}m</Text>
+            <View style={[S.confBadge, { backgroundColor: conf.bg, borderColor: conf.border }]}>
+              <Text style={[S.confText, { color: conf.text }]}>
+                {result.confidence} confidence
+              </Text>
             </View>
-            <View style={S.ciBox}>
-              <Text style={S.ciLabel}>p50 (median)</Text>
-              <Text style={[S.ciVal, { color: COLORS.text }]}>{result.p50}m</Text>
-            </View>
-            <View style={S.ciBox}>
-              <Text style={S.ciLabel}>p90 (worst)</Text>
-              <Text style={[S.ciVal, { color: COLORS.red }]}>{result.p90}m</Text>
+
+            <Text style={S.interp}>{result.interpretation}</Text>
+
+            {/* p10 / p50 / p90 */}
+            <View style={S.ciRow}>
+              <View style={S.ciBox}>
+                <Text style={S.ciLabel}>Best case</Text>
+                <Text style={[S.ciVal, { color: COLORS.teal }]}>
+                  {formatDelay(p10Display)}
+                </Text>
+              </View>
+              <View style={[S.ciBox, {
+                paddingHorizontal: 20,
+                borderLeftWidth: 0.5, borderRightWidth: 0.5,
+                borderColor: COLORS.border,
+              }]}>
+                <Text style={S.ciLabel}>Expected</Text>
+                <Text style={[S.ciVal, { color: COLORS.text }]}>
+                  {formatDelay(p50Display)}
+                </Text>
+              </View>
+              <View style={S.ciBox}>
+                <Text style={S.ciLabel}>Worst case</Text>
+                <Text style={[S.ciVal, { color: COLORS.red }]}>
+                  {formatDelay(p90Display)}
+                </Text>
+              </View>
             </View>
           </View>
 
-          <Text style={[S.interp, { marginTop: 10, fontSize: 11 }]}>
-            Model MAE: ±{result.model_mae ?? "0.76"} min
-            {result.cached ? "  ·  ⚡ cached" : ""}
+          {/* Live GPS info */}
+          {live && (
+            <View style={S.infoRow}>
+              <Ionicons name="navigate-circle" size={18} color={COLORS.teal} />
+              <Text style={S.infoText}>
+                {live.has_live_data
+                  ? `Live GPS: bus at ${stop.name} is currently ${live.live_delay_min > 0
+                      ? `+${live.live_delay_min?.toFixed(1)} min late`
+                      : "on time"}.`
+                  : "No live GPS data for this stop yet — using model estimate."
+                }
+              </Text>
+            </View>
+          )}
+
+          <Text style={{ color: COLORS.dim, fontSize: 11, textAlign: "center",
+                         marginTop: 8, marginBottom: 20 }}>
+            Pull down to refresh · Auto-updates every 30s
           </Text>
         </View>
       )}
