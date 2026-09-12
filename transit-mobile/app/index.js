@@ -1,13 +1,16 @@
 /**
- * app/index.js — Route Planner (clean redesign)
- * - Simple two-input search, no algorithm toggle visible by default
- * - Map shows route polyline properly
- * - Step cards are compact and readable
+ * app/index.js — Route Planner (fixed)
+ * Key fixes:
+ *  - fromStop/toStop stored as {stop_id, name, lat, lon}
+ *  - Route search uses stop NAME (server does fuzzy match)
+ *  - Map polyline built from stop coords in path
+ *  - Clear validation before searching
  */
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
+  View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, ActivityIndicator,
+  Keyboard,
 } from "react-native"
 import MapView, { Marker, Polyline } from "react-native-maps"
 import { Ionicons } from "@expo/vector-icons"
@@ -15,44 +18,46 @@ import { api } from "../api/client"
 import { COLORS, BENGALURU } from "../constants/config"
 
 const S = StyleSheet.create({
-  container:  { flex: 1, backgroundColor: COLORS.bg },
-  map:        { height: 220 },
-  searchBox:  { backgroundColor: COLORS.card, margin: 12, borderRadius: 14,
-                borderWidth: 0.5, borderColor: COLORS.border, overflow: "hidden" },
-  inputRow:   { flexDirection: "row", alignItems: "center", paddingHorizontal: 12,
-                paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
-  dot:        { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
-  input:      { flex: 1, color: COLORS.text, fontSize: 14 },
-  swapBtn:    { padding: 8 },
-  searchBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center",
-                gap: 8, padding: 12, backgroundColor: COLORS.brand },
-  searchText: { color: "#fff", fontWeight: "600", fontSize: 14 },
-  dropdown:   { backgroundColor: COLORS.surface, borderWidth: 0.5,
-                borderColor: COLORS.border, borderRadius: 10,
-                marginHorizontal: 12, marginTop: -4, maxHeight: 160, zIndex: 99 },
-  dropItem:   { padding: 12, borderBottomWidth: 0.5, borderBottomColor: COLORS.border },
-  dropText:   { color: COLORS.text, fontSize: 13 },
-  resultCard: { marginHorizontal: 12, backgroundColor: COLORS.card, borderRadius: 14,
-                borderWidth: 0.5, borderColor: COLORS.border, overflow: "hidden" },
-  resultHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-                padding: 14 },
-  resultTitle:{ color: COLORS.text, fontWeight: "700", fontSize: 15, flex: 1 },
-  resultTime: { color: COLORS.teal, fontWeight: "800", fontSize: 20 },
-  metaRow:    { flexDirection: "row", gap: 8, paddingHorizontal: 14, paddingBottom: 10 },
-  metaPill:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20,
-                backgroundColor: COLORS.surface, borderWidth: 0.5, borderColor: COLORS.border },
-  metaText:   { color: COLORS.sub, fontSize: 11 },
-  step:       { flexDirection: "row", alignItems: "flex-start", gap: 10,
-                padding: 12, borderTopWidth: 0.5, borderTopColor: COLORS.border },
-  stepIcon:   { width: 28, height: 28, borderRadius: 14, alignItems: "center",
-                justifyContent: "center", flexShrink: 0 },
-  stepLabel:  { color: COLORS.text, fontSize: 13, fontWeight: "500", flex: 1 },
-  stepSub:    { color: COLORS.sub, fontSize: 11, marginTop: 2 },
-  stepTime:   { color: COLORS.sub, fontSize: 12, fontVariant: ["tabular-nums"] },
-  emptyMap:   { position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                alignItems: "center", justifyContent: "center",
-                backgroundColor: COLORS.surface },
-  scroll:     { flex: 1 },
+  container:  { flex:1, backgroundColor:COLORS.bg },
+  map:        { height:220 },
+  searchWrap: { backgroundColor:COLORS.card, margin:12, borderRadius:14,
+                borderWidth:0.5, borderColor:COLORS.border, overflow:"hidden" },
+  row:        { flexDirection:"row", alignItems:"center",
+                paddingHorizontal:12, paddingVertical:11,
+                borderBottomWidth:0.5, borderBottomColor:COLORS.border },
+  dot:        { width:10, height:10, borderRadius:5, marginRight:10, flexShrink:0 },
+  input:      { flex:1, color:COLORS.text, fontSize:14 },
+  clearBtn:   { padding:4 },
+  swapBtn:    { padding:8 },
+  findBtn:    { flexDirection:"row", alignItems:"center", justifyContent:"center",
+                gap:8, padding:13, backgroundColor:COLORS.brand },
+  findText:   { color:"#fff", fontWeight:"700", fontSize:14 },
+  drop:       { backgroundColor:COLORS.surface, borderWidth:0.5,
+                borderColor:COLORS.border, borderRadius:10,
+                marginHorizontal:12, marginTop:-6, maxHeight:180, zIndex:99 },
+  dropItem:   { padding:13, borderBottomWidth:0.5, borderBottomColor:COLORS.border },
+  dropText:   { color:COLORS.text, fontSize:13 },
+  errText:    { color:COLORS.red, textAlign:"center", marginTop:6, fontSize:13 },
+  resultWrap: { marginHorizontal:12, marginTop:12, marginBottom:24,
+                backgroundColor:COLORS.card, borderRadius:14,
+                borderWidth:0.5, borderColor:COLORS.border, overflow:"hidden" },
+  rHead:      { flexDirection:"row", justifyContent:"space-between",
+                alignItems:"center", padding:14 },
+  rTitle:     { color:COLORS.text, fontWeight:"700", fontSize:14, flex:1 },
+  rTime:      { color:COLORS.teal, fontWeight:"800", fontSize:22 },
+  rMeta:      { flexDirection:"row", gap:6, paddingHorizontal:14, paddingBottom:10 },
+  rPill:      { paddingHorizontal:8, paddingVertical:3, borderRadius:20,
+                backgroundColor:COLORS.surface, borderWidth:0.5,
+                borderColor:COLORS.border },
+  rPillText:  { color:COLORS.sub, fontSize:11 },
+  step:       { flexDirection:"row", alignItems:"center", gap:10,
+                padding:12, borderTopWidth:0.5, borderTopColor:COLORS.border },
+  stepIcon:   { width:28, height:28, borderRadius:14, alignItems:"center",
+                justifyContent:"center", flexShrink:0 },
+  stepBody:   { flex:1 },
+  stepLabel:  { color:COLORS.text, fontSize:13, fontWeight:"500" },
+  stepSub:    { color:COLORS.sub, fontSize:11, marginTop:1 },
+  stepTime:   { color:COLORS.sub, fontSize:12, fontVariant:["tabular-nums"] },
 })
 
 export default function RoutePlanner() {
@@ -67,144 +72,192 @@ export default function RoutePlanner() {
   const [error,       setError]       = useState("")
 
   useEffect(() => {
-    api.getStops().then(setStops).catch(() => {})
+    api.getStops()
+      .then(data => {
+        // Handle both array and dict response formats
+        if (Array.isArray(data)) setStops(data)
+        else if (typeof data === "object") {
+          setStops(Object.entries(data).map(([id, s]) => ({
+            stop_id: id, name: s.name,
+            lat: String(s.lat), lon: String(s.lon),
+          })))
+        }
+      })
+      .catch(() => {})
   }, [])
 
-  const filtered = (q) => q.length < 1 ? [] :
-    stops.filter(s => s.name.toLowerCase().includes(q.toLowerCase())).slice(0, 6)
+  const filtered = (q) => {
+    if (!q || q.length < 1) return []
+    return stops
+      .filter(s => s.name.toLowerCase().includes(q.toLowerCase()))
+      .slice(0, 7)
+  }
 
   const pick = (stop, field) => {
-    if (field === "from") { setFromStop(stop); setFromText(stop.name) }
-    else                  { setToStop(stop);   setToText(stop.name)   }
+    if (field === "from") {
+      setFromStop({ ...stop })
+      setFromText(stop.name)
+    } else {
+      setToStop({ ...stop })
+      setToText(stop.name)
+    }
     setActiveField(null)
+    setError("")
+    Keyboard.dismiss()
   }
 
   const swap = () => {
+    const tmpStop = fromStop, tmpText = fromText
     setFromStop(toStop);   setFromText(toText)
-    setToStop(fromStop);   setToText(fromText)
+    setToStop(tmpStop);    setToText(tmpText)
     setResult(null)
   }
 
   const search = async () => {
-    if (!fromStop || !toStop) { setError("Pick both stops"); return }
+    if (!fromStop) { setError("Select a 'From' stop from the dropdown"); return }
+    if (!toStop)   { setError("Select a 'To' stop from the dropdown"); return }
+    if (fromStop.stop_id === toStop.stop_id) { setError("Pick two different stops"); return }
+
     setError(""); setLoading(true); setResult(null)
+    Keyboard.dismiss()
     try {
-      setResult(await api.getRoute(fromStop.name, toStop.name, "astar"))
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
+      // Server uses stop NAME with fuzzy matching
+      const data = await api.getRoute(fromStop.name, toStop.name, "astar")
+      setResult(data)
+    } catch (e) {
+      setError(e.message ?? "No route found between these stops")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Build polyline coords from directions
-  const polyline = result?.directions?.reduce((acc, d) => {
-    const a = stops.find(s => s.name === d.from)
-    const b = stops.find(s => s.name === d.to)
-    if (a) acc.push({ latitude: parseFloat(a.lat), longitude: parseFloat(a.lon) })
-    if (b) acc.push({ latitude: parseFloat(b.lat), longitude: parseFloat(b.lon) })
-    return acc
-  }, []) ?? []
+  // Build polyline from result path using stop coords
+  const polyline = (() => {
+    if (!result?.path) return []
+    return result.path
+      .map(stopId => stops.find(s => s.stop_id === stopId))
+      .filter(Boolean)
+      .map(s => ({ latitude: parseFloat(s.lat), longitude: parseFloat(s.lon) }))
+  })()
 
-  // Dedupe consecutive identical coords
-  const dedupedPolyline = polyline.filter((p, i) =>
-    i === 0 || p.latitude !== polyline[i-1].latitude || p.longitude !== polyline[i-1].longitude
-  )
-
-  // Map region to fit route
-  const mapRegion = dedupedPolyline.length > 1 ? {
-    latitude:       (dedupedPolyline[0].latitude + dedupedPolyline[dedupedPolyline.length-1].latitude) / 2,
-    longitude:      (dedupedPolyline[0].longitude + dedupedPolyline[dedupedPolyline.length-1].longitude) / 2,
-    latitudeDelta:  Math.abs(dedupedPolyline[0].latitude - dedupedPolyline[dedupedPolyline.length-1].latitude) + 0.05,
-    longitudeDelta: Math.abs(dedupedPolyline[0].longitude - dedupedPolyline[dedupedPolyline.length-1].longitude) + 0.05,
-  } : BENGALURU
+  // Auto-fit map to show both stops
+  const mapRegion = (() => {
+    const pts = [fromStop, toStop].filter(Boolean)
+    if (pts.length < 2) return BENGALURU
+    const lats = pts.map(p => parseFloat(p.lat))
+    const lons = pts.map(p => parseFloat(p.lon))
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats)
+    const minLon = Math.min(...lons), maxLon = Math.max(...lons)
+    return {
+      latitude:       (minLat + maxLat) / 2,
+      longitude:      (minLon + maxLon) / 2,
+      latitudeDelta:  Math.max(maxLat - minLat, 0.04) * 1.4,
+      longitudeDelta: Math.max(maxLon - minLon, 0.04) * 1.4,
+    }
+  })()
 
   return (
     <View style={S.container}>
-      {/* Map */}
       <MapView style={S.map} region={mapRegion} userInterfaceStyle="dark">
         {fromStop && (
           <Marker
-            coordinate={{ latitude: parseFloat(fromStop.lat), longitude: parseFloat(fromStop.lon) }}
+            coordinate={{ latitude:parseFloat(fromStop.lat), longitude:parseFloat(fromStop.lon) }}
             pinColor={COLORS.brand}
             title={fromStop.name}
           />
         )}
         {toStop && (
           <Marker
-            coordinate={{ latitude: parseFloat(toStop.lat), longitude: parseFloat(toStop.lon) }}
+            coordinate={{ latitude:parseFloat(toStop.lat), longitude:parseFloat(toStop.lon) }}
             pinColor={COLORS.teal}
             title={toStop.name}
           />
         )}
-        {dedupedPolyline.length > 1 && (
+        {polyline.length > 1 && (
           <Polyline
-            coordinates={dedupedPolyline}
+            coordinates={polyline}
             strokeColor={COLORS.teal}
             strokeWidth={4}
-            lineDashPattern={null}
           />
         )}
       </MapView>
 
-      <ScrollView style={S.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView keyboardShouldPersistTaps="always">
         {/* Search box */}
-        <View style={S.searchBox}>
+        <View style={S.searchWrap}>
           {/* From */}
-          <View style={S.inputRow}>
+          <View style={S.row}>
             <View style={[S.dot, { backgroundColor: COLORS.brand }]} />
             <TextInput
               style={S.input}
               value={fromText}
-              onChangeText={t => { setFromText(t); setFromStop(null); setActiveField("from") }}
+              onChangeText={t => {
+                setFromText(t)
+                setFromStop(null)
+                setActiveField("from")
+                setResult(null)
+              }}
               onFocus={() => setActiveField("from")}
-              placeholder="From stop…"
+              placeholder="From — type stop name"
               placeholderTextColor={COLORS.dim}
             />
             {fromText.length > 0 && (
-              <TouchableOpacity onPress={() => { setFromText(""); setFromStop(null) }}>
+              <TouchableOpacity style={S.clearBtn}
+                onPress={() => { setFromText(""); setFromStop(null); setActiveField("from") }}>
                 <Ionicons name="close-circle" size={16} color={COLORS.dim} />
               </TouchableOpacity>
             )}
           </View>
           {/* To */}
-          <View style={S.inputRow}>
+          <View style={S.row}>
             <View style={[S.dot, { backgroundColor: COLORS.teal }]} />
             <TextInput
               style={S.input}
               value={toText}
-              onChangeText={t => { setToText(t); setToStop(null); setActiveField("to") }}
+              onChangeText={t => {
+                setToText(t)
+                setToStop(null)
+                setActiveField("to")
+                setResult(null)
+              }}
               onFocus={() => setActiveField("to")}
-              placeholder="To stop…"
+              placeholder="To — type stop name"
               placeholderTextColor={COLORS.dim}
             />
             <TouchableOpacity style={S.swapBtn} onPress={swap}>
               <Ionicons name="swap-vertical" size={18} color={COLORS.sub} />
             </TouchableOpacity>
           </View>
-          {/* Search button */}
-          <TouchableOpacity style={S.searchBtn} onPress={search} disabled={loading}>
+          {/* Find button */}
+          <TouchableOpacity style={S.findBtn} onPress={search} disabled={loading}>
             {loading
               ? <ActivityIndicator color="#fff" size="small" />
               : <>
                   <Ionicons name="navigate" size={16} color="#fff" />
-                  <Text style={S.searchText}>Find route</Text>
+                  <Text style={S.findText}>Find route</Text>
                 </>
             }
           </TouchableOpacity>
         </View>
 
-        {/* Dropdowns */}
+        {/* From dropdown */}
         {activeField === "from" && filtered(fromText).length > 0 && (
-          <View style={S.dropdown}>
+          <View style={S.drop}>
             {filtered(fromText).map(s => (
-              <TouchableOpacity key={s.stop_id} style={S.dropItem} onPress={() => pick(s, "from")}>
+              <TouchableOpacity key={s.stop_id} style={S.dropItem}
+                onPress={() => pick(s, "from")}>
                 <Text style={S.dropText}>{s.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
         )}
+
+        {/* To dropdown */}
         {activeField === "to" && filtered(toText).length > 0 && (
-          <View style={S.dropdown}>
+          <View style={S.drop}>
             {filtered(toText).map(s => (
-              <TouchableOpacity key={s.stop_id} style={S.dropItem} onPress={() => pick(s, "to")}>
+              <TouchableOpacity key={s.stop_id} style={S.dropItem}
+                onPress={() => pick(s, "to")}>
                 <Text style={S.dropText}>{s.name}</Text>
               </TouchableOpacity>
             ))}
@@ -212,50 +265,46 @@ export default function RoutePlanner() {
         )}
 
         {/* Error */}
-        {error ? (
-          <Text style={{ color: COLORS.red, textAlign: "center", marginTop: 8, fontSize: 13 }}>
-            {error}
-          </Text>
-        ) : null}
+        {error ? <Text style={S.errText}>{error}</Text> : null}
 
-        {/* Result */}
+        {/* Result card */}
         {result && (
-          <View style={[S.resultCard, { marginTop: 12, marginBottom: 20 }]}>
-            {/* Header */}
-            <View style={S.resultHead}>
-              <Text style={S.resultTitle} numberOfLines={1}>
+          <View style={S.resultWrap}>
+            <View style={S.rHead}>
+              <Text style={S.rTitle} numberOfLines={1}>
                 {result.from_stop} → {result.to_stop}
               </Text>
-              <Text style={S.resultTime}>{result.total_minutes} min</Text>
+              <Text style={S.rTime}>{result.total_minutes} min</Text>
             </View>
-
-            {/* Meta */}
-            <View style={S.metaRow}>
-              <View style={S.metaPill}>
-                <Text style={S.metaText}>{result.algorithm}</Text>
+            <View style={S.rMeta}>
+              <View style={S.rPill}>
+                <Text style={S.rPillText}>{result.algorithm?.toUpperCase()}</Text>
               </View>
-              <View style={S.metaPill}>
-                <Text style={S.metaText}>{result.transfers} transfer{result.transfers !== 1 ? "s" : ""}</Text>
+              <View style={S.rPill}>
+                <Text style={S.rPillText}>
+                  {result.transfers} transfer{result.transfers !== 1 ? "s":""}</Text>
               </View>
               {result.cached && (
-                <View style={[S.metaPill, { borderColor: COLORS.teal }]}>
-                  <Text style={[S.metaText, { color: COLORS.teal }]}>⚡ cached</Text>
+                <View style={[S.rPill, { borderColor:COLORS.teal }]}>
+                  <Text style={[S.rPillText, { color:COLORS.teal }]}>⚡ cached</Text>
                 </View>
               )}
             </View>
 
-            {/* Steps */}
             {result.directions?.map((step, i) => {
-              const isWalk    = step.type === "walk"
-              const iconName  = isWalk ? "walk" : "bus"
-              const iconColor = isWalk ? COLORS.yellow : COLORS.brand
-              const iconBg    = isWalk ? "#422006" : "#1e3a5f"
+              const isWalk = step.type === "walk" || step.route === "WALK"
               return (
                 <View key={i} style={S.step}>
-                  <View style={[S.stepIcon, { backgroundColor: iconBg }]}>
-                    <Ionicons name={iconName} size={14} color={iconColor} />
+                  <View style={[S.stepIcon, {
+                    backgroundColor: isWalk ? "#422006" : "#1e3a5f",
+                  }]}>
+                    <Ionicons
+                      name={isWalk ? "walk" : "bus"}
+                      size={14}
+                      color={isWalk ? COLORS.yellow : COLORS.brand}
+                    />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={S.stepBody}>
                     <Text style={S.stepLabel}>
                       {isWalk ? "Walk" : `Route ${step.route}`}
                     </Text>
