@@ -1,9 +1,9 @@
 /**
  * constants/config.js
- * Configured pointing to your local laptop IP: 10.18.8.180
+ * Configured pointing to your local laptop IP: 10.18.23.152
  */
-export const API_URL = "http://10.18.8.180:8000"
-export const WS_URL  = "ws://10.18.8.180:8000/ws/live-feed"
+export const API_URL = "http://10.18.23.152:8000"
+export const WS_URL  = "ws://10.18.23.152:8000/ws/live-feed"
 
 export const COLORS = {
   bg:      "#030712",
