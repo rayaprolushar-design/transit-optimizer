@@ -12,7 +12,7 @@ import {
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { api } from "../api/client"
-import { COLORS } from "../constants/config"
+import { COLORS, ALL_STOPS } from "../constants/config"
 
 const S = StyleSheet.create({
   container:   { flex: 1, backgroundColor: COLORS.bg },
@@ -57,16 +57,7 @@ const CONF_COLORS = {
 }
 
 // Quick stops for one-tap selection
-const QUICK_STOPS = [
-  { stop_id:"S001", name:"MG Road" },
-  { stop_id:"S004", name:"Indiranagar" },
-  { stop_id:"S006", name:"Koramangala" },
-  { stop_id:"S007", name:"BTM Layout" },
-  { stop_id:"S017", name:"HSR Layout" },
-  { stop_id:"S020", name:"Silk Board" },
-  { stop_id:"S013", name:"Hebbal" },
-  { stop_id:"S021", name:"MG Road Metro" },
-]
+const QUICK_STOPS = ALL_STOPS  // all 23 stops
 
 function formatDelay(min) {
   if (min < 1)  return "On time"
