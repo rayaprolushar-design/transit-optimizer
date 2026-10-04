@@ -232,6 +232,11 @@
         "trips": 1,
         "type": "walk",
         "dist_km": 0.047
+      },
+      "S016": {
+        "minutes": 18,
+        "route": "27",
+        "trips": 1
       }
     },
     "S005": {
@@ -273,6 +278,16 @@
         "minutes": 12,
         "route": "33",
         "trips": 1
+      },
+      "S001": {
+        "minutes": 13,
+        "route": "33",
+        "trips": 1
+      },
+      "S018": {
+        "minutes": 20,
+        "route": "33",
+        "trips": 1
       }
     },
     "S007": {
@@ -287,11 +302,26 @@
         "minutes": 14,
         "route": "27",
         "trips": 1
+      },
+      "S002": {
+        "minutes": 22,
+        "route": "27",
+        "trips": 1
+      },
+      "S004": {
+        "minutes": 18,
+        "route": "27",
+        "trips": 1
       }
     },
     "S013": {
       "S014": {
         "minutes": 8,
+        "route": "33",
+        "trips": 1
+      },
+      "S010": {
+        "minutes": 20,
         "route": "33",
         "trips": 1
       }
@@ -308,6 +338,11 @@
         "minutes": 15,
         "route": "33",
         "trips": 1
+      },
+      "S020": {
+        "minutes": 12,
+        "route": "33",
+        "trips": 1
       }
     },
     "S009": {
@@ -315,11 +350,21 @@
         "minutes": 8,
         "route": "41",
         "trips": 1
+      },
+      "S010": {
+        "minutes": 14,
+        "route": "41",
+        "trips": 1
       }
     },
     "S008": {
       "S019": {
         "minutes": 9,
+        "route": "41",
+        "trips": 1
+      },
+      "S010": {
+        "minutes": 18,
         "route": "41",
         "trips": 1
       }
@@ -373,6 +418,25 @@
         "trips": 1,
         "type": "walk",
         "dist_km": 0.047
+      }
+    },
+    "S018": {
+      "S017": {
+        "minutes": 15,
+        "route": "33",
+        "trips": 1
+      },
+      "S020": {
+        "minutes": 20,
+        "route": "33",
+        "trips": 1
+      }
+    },
+    "S015": {
+      "S016": {
+        "minutes": 14,
+        "route": "27",
+        "trips": 1
       }
     }
   }
