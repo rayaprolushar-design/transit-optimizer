@@ -12,7 +12,7 @@ import {
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { api } from "../api/client"
-import { COLORS } from "../constants/config"
+import { COLORS, ALL_STOPS } from "../constants/config"
 
 const S = StyleSheet.create({
   container:  { flex:1, backgroundColor:COLORS.bg },
@@ -52,14 +52,7 @@ const S = StyleSheet.create({
   tickText:   { color:COLORS.dim, fontSize:11 },
 })
 
-const STOPS = [
-  { stop_id:"S001", name:"MG Road" },
-  { stop_id:"S004", name:"Indiranagar" },
-  { stop_id:"S006", name:"Koramangala" },
-  { stop_id:"S007", name:"BTM Layout" },
-  { stop_id:"S017", name:"HSR Layout" },
-  { stop_id:"S020", name:"Silk Board" },
-]
+const STOPS = ALL_STOPS  // all 23 stops
 
 // Generate simulated arrivals when API returns empty
 function simulateArrivals(stopId) {
